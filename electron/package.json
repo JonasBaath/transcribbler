@@ -1,0 +1,46 @@
+{
+  "name": "transcribbler",
+  "version": "1.0.0",
+  "description": "Lokal app for kvalitativ transkript-kodning",
+  "main": "main.js",
+  "scripts": {
+    "postinstall": "node -e \"if(process.platform==='darwin'){const p=require('path').join('node_modules','electron','dist','Electron.app','Contents','Info.plist');require('child_process').execSync('plutil -replace CFBundleName -string transcribbler '+p+' && plutil -replace CFBundleDisplayName -string transcribbler '+p)}\"",
+    "start": "electron .",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux",
+    "build": "electron-builder -mwl"
+  },
+  "devDependencies": {
+    "electron": "^30.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "se.jonasbaaath.transcribbler",
+    "productName": "Transcribbler",
+    "directories": { "buildResources": "assets", "output": "dist" },
+    "files": ["main.js", "preload.js"],
+    "extraResources": [{
+      "from": "../",
+      "to": "app",
+      "filter": ["main.py", "requirements.txt", "core/**/*", "static/**/*", "templates/**/*"]
+    }],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "icon": "assets/icon.icns",
+      "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }]
+    },
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [{ "target": "nsis", "arch": ["x64"] }]
+    },
+    "linux": {
+      "icon": "assets/icon.png",
+      "target": [
+        { "target": "AppImage", "arch": ["x64"] },
+        { "target": "deb", "arch": ["x64"] }
+      ],
+      "category": "Science"
+    }
+  }
+}

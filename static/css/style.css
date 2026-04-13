@@ -121,6 +121,23 @@ details summary { cursor: pointer; color: var(--text-dim); font-size: 12px; marg
   padding: 0 16px; gap: 12px;
   position: relative;
 }
+/* macOS Electron: make room for traffic-light buttons */
+body.electron-mac #topbar {
+  padding-left: 80px;
+  -webkit-app-region: drag;
+}
+body.electron-mac #topbar button,
+body.electron-mac #topbar input,
+body.electron-mac #topbar select,
+body.electron-mac #topbar [contenteditable] {
+  -webkit-app-region: no-drag;
+}
+body.electron-mac #tools-dropdown {
+  display: none;
+}
+body.electron-mac #coder-badge {
+  left: calc(var(--left-w, 220px) - 14px + 64px);
+}
 #topbar-logo { width: 28px; height: 12px; flex-shrink: 0; }
 #topbar-logo line { stroke: var(--accent); }
 #topbar-logo rect  { fill: var(--accent); }

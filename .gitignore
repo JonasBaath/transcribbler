@@ -22,3 +22,6 @@ Thumbs.db
 
 # Project data (user content)
 TestProject/
+
+# Scratch files
+*.txt

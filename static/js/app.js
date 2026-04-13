@@ -5,6 +5,30 @@
 "use strict";
 
 // ---------------------------------------------------------------------------
+// Electron native menu integration
+// ---------------------------------------------------------------------------
+if (window.electronAPI) {
+  if (window.electronAPI.platform === 'darwin') {
+    document.body.classList.add('electron-mac');
+  }
+  if (window.electronAPI.onMenuClick) {
+    window.electronAPI.onMenuClick((btnId) => {
+      const el = document.getElementById(btnId);
+      if (el) el.click();
+    });
+  }
+  // Sync menu language with app language
+  if (window.electronAPI.setMenuLang) {
+    window.electronAPI.setMenuLang(currentLang);
+    const origSetLang = setLang;
+    setLang = function(lang) {
+      origSetLang(lang);
+      window.electronAPI.setMenuLang(lang);
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
 let project = null;
@@ -146,13 +170,23 @@ async function loadRecentProjects() {
 
 // ---- Native folder pickers ----
 async function pickFolder(targetInputId) {
-  const res = await GET("/api/pick-folder");
-  if (res.folder) document.getElementById(targetInputId).value = res.folder;
+  let folder;
+  if (window.electronAPI) {
+    folder = await window.electronAPI.pickFolder();
+  } else {
+    const res = await GET("/api/pick-folder");
+    folder = res.folder;
+  }
+  if (folder) document.getElementById(targetInputId).value = folder;
 }
 document.getElementById("btn-pick-open").addEventListener("click", () => pickFolder("open-folder"));
 document.getElementById("btn-pick-new").addEventListener("click",  () => pickFolder("new-folder"));
 
 // ---- Open ----
+document.getElementById("open-coder").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); document.getElementById("btn-open").click(); }
+});
+
 document.getElementById("btn-open").addEventListener("click", async () => {
   const folder = document.getElementById("open-folder").value.trim();
   const coder  = document.getElementById("open-coder").value.trim();
@@ -166,6 +200,10 @@ document.getElementById("btn-open").addEventListener("click", async () => {
 });
 
 // ---- New ----
+document.getElementById("new-coder").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); document.getElementById("btn-new").click(); }
+});
+
 document.getElementById("btn-new").addEventListener("click", async () => {
   const folder = document.getElementById("new-folder").value.trim();
   const name   = document.getElementById("new-name").value.trim();
@@ -1937,10 +1975,16 @@ document.getElementById("btn-export-menu").addEventListener("click", () => {
 });
 
 document.getElementById("btn-export-browse").addEventListener("click", async () => {
-  const res = await GET("/api/pick-folder");
-  if (res.folder) {
-    document.getElementById("export-folder-input").value = res.folder;
-    localStorage.setItem("transcribbler_export_folder", res.folder);
+  let folder;
+  if (window.electronAPI) {
+    folder = await window.electronAPI.pickFolder();
+  } else {
+    const res = await GET("/api/pick-folder");
+    folder = res.folder;
+  }
+  if (folder) {
+    document.getElementById("export-folder-input").value = folder;
+    localStorage.setItem("transcribbler_export_folder", folder);
   }
 });
 
