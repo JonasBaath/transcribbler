@@ -1,24 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Background -->
-  <rect width="512" height="512" rx="110" fill="#1e1e2e"/>
+  <!-- 4% transparent margin on each side: content scaled to 92%, offset 20.5px -->
+  <g transform="translate(20.5, 20.5) scale(0.92)">
+    <!-- Background -->
+    <rect width="512" height="512" rx="110" fill="#1e1e2e"/>
 
-  <!-- Waveform bars as filled rects (left side), centered at x~150, y=256 -->
-  <!-- Baseline -->
-  <rect x="48" y="244" width="210" height="24" rx="12" fill="#89b4fa"/>
-  <!-- Bar 1 (short) -->
-  <rect x="88"  y="210" width="26" height="92"  rx="13" fill="#89b4fa"/>
-  <!-- Bar 2 (medium) -->
-  <rect x="130" y="178" width="26" height="156" rx="13" fill="#89b4fa"/>
-  <!-- Bar 3 (tall) -->
-  <rect x="172" y="148" width="26" height="216" rx="13" fill="#89b4fa"/>
-  <!-- Bar 4 (medium) -->
-  <rect x="214" y="166" width="26" height="180" rx="13" fill="#89b4fa"/>
+    <!-- Waveform bars as filled rects (left side), centered at x~150, y=256 -->
+    <!-- Baseline -->
+    <rect x="48" y="244" width="210" height="24" rx="12" fill="#89b4fa"/>
+    <!-- Bar 1 (short) -->
+    <rect x="88"  y="210" width="26" height="92"  rx="13" fill="#89b4fa"/>
+    <!-- Bar 2 (medium) -->
+    <rect x="130" y="178" width="26" height="156" rx="13" fill="#89b4fa"/>
+    <!-- Bar 3 (tall) -->
+    <rect x="172" y="148" width="26" height="216" rx="13" fill="#89b4fa"/>
+    <!-- Bar 4 (medium) -->
+    <rect x="214" y="166" width="26" height="180" rx="13" fill="#89b4fa"/>
 
-  <!-- Coding squares (right side) -->
-  <rect x="276" y="152" width="50" height="50" rx="8" fill="#89b4fa"/>
-  <rect x="338" y="164" width="36" height="36" rx="6" fill="#89b4fa" opacity="0.65"/>
-  <rect x="386" y="170" width="78" height="26" rx="6" fill="#89b4fa" opacity="0.35"/>
-  <rect x="276" y="220" width="86" height="86" rx="10" fill="#89b4fa"/>
-  <rect x="374" y="238" width="60" height="60" rx="8" fill="#89b4fa" opacity="0.65"/>
-  <rect x="276" y="318" width="158" height="32" rx="7" fill="#89b4fa" opacity="0.3"/>
+    <!-- Coding squares (right side) -->
+    <rect x="276" y="152" width="50" height="50" rx="8" fill="#89b4fa"/>
+    <rect x="338" y="164" width="36" height="36" rx="6" fill="#89b4fa" opacity="0.65"/>
+    <rect x="386" y="170" width="78" height="26" rx="6" fill="#89b4fa" opacity="0.35"/>
+    <rect x="276" y="220" width="86" height="86" rx="10" fill="#89b4fa"/>
+    <rect x="374" y="238" width="60" height="60" rx="8" fill="#89b4fa" opacity="0.65"/>
+    <rect x="276" y="318" width="158" height="32" rx="7" fill="#89b4fa" opacity="0.3"/>
+  </g>
 </svg>
