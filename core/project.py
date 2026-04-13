@@ -218,6 +218,12 @@ def remove_transcript(folder: str, project: dict, tid: str) -> dict:
             p = Path(folder) / TRANSCRIPTS_DIR / fname
             if p.exists():
                 p.unlink()
+    # Remove attached photos (imported from Notescribbler)
+    for fname in t.get("photos", []):
+        if fname:
+            p = Path(folder) / TRANSCRIPTS_DIR / fname
+            if p.exists():
+                p.unlink()
     # Remove segments file (audio transcripts)
     seg_path = Path(folder) / TRANSCRIPTS_DIR / f"{tid}_segments.json"
     if seg_path.exists():
