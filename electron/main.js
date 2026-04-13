@@ -252,6 +252,9 @@ function killFlask() {
 }
 
 app.whenReady().then(async () => {
+  if (process.platform === 'darwin') {
+    app.dock.setIcon(path.join(__dirname, 'assets', 'icon.png'));
+  }
   flaskPort = await findFreePort();
   startFlask(flaskPort);
 
