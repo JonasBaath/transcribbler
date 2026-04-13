@@ -107,6 +107,15 @@ def _require_project():
     return None
 
 
+def _safe_transcript_path(filename: str) -> Path:
+    """Resolve a transcript-relative filename and verify it stays inside the
+    project's transcripts/ directory.  Raises ValueError on traversal."""
+    base = Path(STATE["folder"]).resolve() / "transcripts"
+    resolved = (base / filename).resolve()
+    resolved.relative_to(base)   # raises ValueError if outside
+    return resolved
+
+
 # ---------------------------------------------------------------------------
 # Serve frontend
 # ---------------------------------------------------------------------------
@@ -989,7 +998,10 @@ def update_transcript_text(tid):
     text = (request.json or {}).get("text")
     if text is None:
         return jsonify({"error": "text krävs."}), 400
-    txt_path = Path(STATE["folder"]) / "transcripts" / t["text_file"]
+    try:
+        txt_path = _safe_transcript_path(t["text_file"])
+    except (ValueError, KeyError):
+        return jsonify({"error": "Ogiltig filsökväg."}), 400
     try:
         txt_path.write_text(text, encoding="utf-8")
     except Exception:
@@ -1060,7 +1072,10 @@ def get_audio(tid):
     t = next((t for t in STATE["project"]["transcripts"] if t["id"] == tid), None)
     if not t or not t.get("audio_file"):
         return jsonify({"error": "Ingen ljudfil hittades."}), 404
-    audio_path = Path(STATE["folder"]) / "transcripts" / t["audio_file"]
+    try:
+        audio_path = _safe_transcript_path(t["audio_file"])
+    except ValueError:
+        return jsonify({"error": "Ogiltig filsökväg."}), 400
     if not audio_path.exists():
         return jsonify({"error": "Ljudfilen saknas på disk."}), 404
     return send_from_directory(str(audio_path.parent), audio_path.name)
@@ -1075,7 +1090,10 @@ def get_source_image(tid):
     t = next((t for t in STATE["project"]["transcripts"] if t["id"] == tid), None)
     if not t or not t.get("source_file"):
         return jsonify({"error": "Ingen källbild hittades."}), 404
-    img_path = Path(STATE["folder"]) / "transcripts" / t["source_file"]
+    try:
+        img_path = _safe_transcript_path(t["source_file"])
+    except ValueError:
+        return jsonify({"error": "Ogiltig filsökväg."}), 400
     if not img_path.exists():
         return jsonify({"error": "Källbilden saknas på disk."}), 404
     # HEIC/HEIF not supported by browsers — convert to JPEG on-the-fly via sips (macOS built-in)
@@ -1109,7 +1127,10 @@ def get_transcript_photo(tid, n):
     photos = t.get("photos", [])
     if n < 0 or n >= len(photos):
         return "", 404
-    photo_path = Path(STATE["folder"]) / "transcripts" / photos[n]
+    try:
+        photo_path = _safe_transcript_path(photos[n])
+    except ValueError:
+        return "", 400
     if not photo_path.exists():
         return "", 404
     if photo_path.suffix.lower() in (".heic", ".heif"):
@@ -1196,11 +1217,14 @@ def ocr_transcript_photos(tid):
     photos = t.get("photos", [])
     if not photos:
         return jsonify({"error": "Inga foton att OCR:a."}), 400
-    photo_paths = [
-        str(Path(STATE["folder"]) / "transcripts" / p)
-        for p in photos
-        if (Path(STATE["folder"]) / "transcripts" / p).exists()
-    ]
+    photo_paths = []
+    for p in photos:
+        try:
+            resolved = _safe_transcript_path(p)
+            if resolved.exists():
+                photo_paths.append(str(resolved))
+        except ValueError:
+            pass
     if not photo_paths:
         return jsonify({"error": "Fotofiler saknas på disk."}), 404
     job_id = str(uuid.uuid4())
