@@ -126,10 +126,7 @@ body.electron-mac #topbar {
   padding-left: 80px;
   -webkit-app-region: drag;
 }
-body.electron-mac #topbar button,
-body.electron-mac #topbar input,
-body.electron-mac #topbar select,
-body.electron-mac #topbar [contenteditable] {
+body.electron-mac #topbar * {
   -webkit-app-region: no-drag;
 }
 body.electron-mac #tools-dropdown {
