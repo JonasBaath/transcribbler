@@ -6,7 +6,7 @@ const http = require('http');
 const fs = require('fs');
 
 // Set app name (shown in macOS menu bar and dock)
-app.setName('transcribbler');
+app.setName('Transcribbler');
 
 let flaskProcess = null;
 let mainWindow = null;

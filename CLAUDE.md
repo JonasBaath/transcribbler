@@ -215,7 +215,7 @@ Event-lyssnare på element som inte finns i gammal cachad HTML ska använda `?.a
 `e.preventDefault()` på `mousedown` i en lista **undertrycker** efterföljande `click`-event — använd det aldrig för detta. Förhindra text-selektion under drag med CSS `user-select: none` på list-items istället.
 
 **Cache-busting**
-`app.js` och `translations.js` laddas med `?v=N` i `index.html`. Öka N vid JS/translations-ändringar. Aktuella versioner: **app.js v=54**, **translations.js v=18**. Flask serverar alltid färskt innehåll (`SEND_FILE_MAX_AGE_DEFAULT=0`), men webbläsarens HTML-cache kräver **Cmd+Shift+R** efter HTML-ändringar.
+`app.js` och `translations.js` laddas med `?v=N` i `index.html`. Öka N vid JS/translations-ändringar. Aktuella versioner: **app.js v=56**, **translations.js v=18**. Flask serverar alltid färskt innehåll (`SEND_FILE_MAX_AGE_DEFAULT=0`), men webbläsarens HTML-cache kräver **Cmd+Shift+R** efter HTML-ändringar.
 
 **CSS-variabelpropagering (`--left-w`, `--right-w`)**
 Panelbredder sätts i `initResizablePanels`. Eftersom `#topbar` och `#workspace` är syskon (inte förälder/barn) propagerar variabler satta på `#workspace` **inte** till `#topbar`. Lösning: sätt alltid på **båda** `workspace` och `document.documentElement` i `onMove` (drag) och vid initial laddning från localStorage.

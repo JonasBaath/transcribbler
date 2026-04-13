@@ -121,12 +121,24 @@ details summary { cursor: pointer; color: var(--text-dim); font-size: 12px; marg
   padding: 0 16px; gap: 12px;
   position: relative;
 }
+/* macOS Electron: rounded corners to match native window */
+html.electron-mac {
+  border-radius: 10px;
+  overflow: hidden;
+}
 /* macOS Electron: make room for traffic-light buttons */
 body.electron-mac #topbar {
   padding-left: 80px;
   -webkit-app-region: drag;
 }
 body.electron-mac #topbar * {
+  -webkit-app-region: no-drag;
+}
+/* macOS Electron: splash is draggable from dark background */
+body.electron-mac #splash {
+  -webkit-app-region: drag;
+}
+body.electron-mac #splash * {
   -webkit-app-region: no-drag;
 }
 body.electron-mac #tools-dropdown {

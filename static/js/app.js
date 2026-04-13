@@ -9,6 +9,7 @@
 // ---------------------------------------------------------------------------
 if (window.electronAPI) {
   if (window.electronAPI.platform === 'darwin') {
+    document.documentElement.classList.add('electron-mac');
     document.body.classList.add('electron-mac');
   }
   if (window.electronAPI.onMenuClick) {
