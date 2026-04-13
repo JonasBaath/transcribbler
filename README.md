@@ -4,26 +4,26 @@
 
 # Transcribbler
 
-Lokal skrivbordsapp för kvalitativ transkript-kodning. Ladda in transkript (text, ljud eller bild), bygg en hierarkisk kodbok och koda textpassager — allt offline, utan molntjänster.
+A local desktop app for qualitative transcript coding. Import transcripts (text, audio, or image), build a hierarchical codebook, and code text passages — entirely offline, no cloud services required.
 
 ![Transcribbler screenshot](docs/screenshot.png)
 
-## Funktioner
+## Features
 
-- **Transkription** — automatisk tal-till-text via Whisper (KB-Whisper för svenska, Whisper Medium för engelska)
-- **Diarisering** — talaruppdelning via pyannote.audio + ECAPA-TDNN
-- **Kodning** — markera textpassager och koppla till hierarkiska koder; ångra/gör om
-- **Flera kodare** — stöd för inter-rater reliability (Cohen's Kappa)
-- **OCR** — importera bilder och extrahera text (Apple Vision på macOS, docTR på Windows/Linux)
-- **Export** — CSV, Markdown, DOCX, ODT, QDPX (ATLAS.ti/NVivo-kompatibelt)
-- **Import** — .txt, .docx, .odt, .md (inkl. YAML-frontmatter från Notescribbler), .nsenc, .scribbler
-- **Offline-first** — inga API-nycklar krävs, all data stannar lokalt
+- **Transcription** — automatic speech-to-text via Whisper (KB-Whisper for Swedish, Whisper Medium for English)
+- **Diarization** — speaker separation via pyannote.audio + ECAPA-TDNN
+- **Coding** — highlight text passages and link them to hierarchical codes; undo/redo support
+- **Multiple coders** — inter-rater reliability support (Cohen's Kappa)
+- **OCR** — import images and extract text (Apple Vision on macOS, docTR on Windows/Linux)
+- **Export** — CSV, Markdown, DOCX, ODT, QDPX (ATLAS.ti/NVivo-compatible)
+- **Import** — .txt, .docx, .odt, .md (incl. YAML frontmatter from Notescribbler), .nsenc, .scribbler
+- **Offline-first** — no API keys required, all data stays local
 
-## Krav
+## Requirements
 
 - Python 3.9–3.11
-- [ffmpeg](https://ffmpeg.org/) (krävs för Whisper): `brew install ffmpeg`
-- HF-token för diarisering (valfritt): [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
+- [ffmpeg](https://ffmpeg.org/) (required for Whisper): `brew install ffmpeg`
+- HF token for diarization (optional): [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
 
 ## Installation
 
@@ -32,20 +32,20 @@ git clone https://github.com/jonasbaath/transcribbler.git
 cd transcribbler
 python3 -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
-pip install -r requirements.txt   # grundinstallation (Flask + krypto)
-pip install -r requirements-ml.txt  # ML-beroenden (Whisper, pyannote, OCR)
+pip install -r requirements.txt   # core installation (Flask + crypto)
+pip install -r requirements-ml.txt  # ML dependencies (Whisper, pyannote, OCR)
 ```
 
-## Köra
+## Running
 
 ```bash
 source venv/bin/activate
 python3 main.py
 ```
 
-Öppnar automatiskt `http://127.0.0.1:5050` i webbläsaren.
+Opens `http://127.0.0.1:5050` automatically in the browser.
 
-### Electron-app (skrivbord)
+### Electron app (desktop)
 
 ```bash
 cd electron
@@ -53,35 +53,35 @@ npm install
 npm start
 ```
 
-Kräver [Node.js](https://nodejs.org/) ≥ 20.
+Requires [Node.js](https://nodejs.org/) ≥ 20.
 
-## Projektstruktur
+## Project structure
 
 ```
-main.py              Flask-app — alla routes
+main.py              Flask app — all routes
 core/
-  project.py         Projekthantering (skapa, öppna, import)
-  annotation.py      Annoteringar per kodare (char-offset)
-  codebook.py        CRUD för koder (hierarkiskt träd)
-  transcribe.py      Whisper + pyannote (transkription + diarisering)
+  project.py         Project management (create, open, import)
+  annotation.py      Annotations per coder (char-offset)
+  codebook.py        CRUD for codes (hierarchical tree)
+  transcribe.py      Whisper + pyannote (transcription + diarization)
   export.py          CSV, Markdown, DOCX, ODT, QDPX
   irr.py             Cohen's Kappa (inter-rater reliability)
-  nsenc.py           Kryptering (.nsenc — Notescribbler-format)
-  scribbler.py       Kryptering (.scribbler — Notescribbler-format)
-static/js/app.js     All frontend-logik (~2400 rader)
-electron/            Electron-skal (main.js, preload.js)
-tests/               Pytest-testsvit
+  nsenc.py           Encryption (.nsenc — Notescribbler format)
+  scribbler.py       Encryption (.scribbler — Notescribbler format)
+static/js/app.js     All frontend logic (~2400 lines)
+electron/            Electron shell (main.js, preload.js)
+tests/               Pytest test suite
 ```
 
-## Tester
+## Tests
 
 ```bash
 pip install pytest
 pytest tests/ -v
 ```
 
-## Licens
+## License
 
 © Jonas Bååth — [GNU Affero General Public License v3.0](LICENSE)
 
-Källkoden är fri att använda, modifiera och distribuera under villkoren i AGPL-3.0. Modifierade versioner som tillhandahålls som nätverkstjänst måste distribuera sin källkod.
+The source code is free to use, modify, and distribute under the terms of AGPL-3.0. Modified versions provided as a network service must distribute their source code.
