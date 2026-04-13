@@ -2,7 +2,10 @@
   "name": "transcribbler",
   "version": "1.0.0",
   "description": "Lokal app for kvalitativ transkript-kodning",
-  "author": "Jonas Baath",
+  "author": {
+    "name": "Jonas Baath",
+    "email": "jonas.baath@slu.se"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/JonasBaath/transcribbler.git"
