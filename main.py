@@ -107,6 +107,44 @@ def _require_project():
     return None
 
 
+def _heic_to_jpeg_bytes(img_path: Path):
+    """Convert a HEIC/HEIF file to JPEG bytes.
+
+    Tries sips (macOS built-in) first, then ImageMagick (magick/convert),
+    then Pillow+pillow-heif.  Returns None if no converter is available so
+    callers can fall back to serving the raw file.
+    """
+    import subprocess, tempfile, platform
+    with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
+        tmp_path = tmp.name
+    try:
+        if platform.system() == "Darwin":
+            subprocess.run(
+                ["sips", "-s", "format", "jpeg", str(img_path), "--out", tmp_path],
+                check=True, capture_output=True,
+            )
+        else:
+            # Try ImageMagick (magick ≥7) then legacy convert
+            for cmd in (["magick", str(img_path), tmp_path],
+                        ["convert", str(img_path), tmp_path]):
+                try:
+                    subprocess.run(cmd, check=True, capture_output=True)
+                    break
+                except (FileNotFoundError, subprocess.CalledProcessError):
+                    continue
+            else:
+                # Last resort: pillow-heif
+                from PIL import Image
+                import pillow_heif  # noqa — registers HEIF opener
+                Image.open(img_path).convert("RGB").save(tmp_path, "JPEG")
+        return Path(tmp_path).read_bytes()
+    except Exception:
+        logger.exception("HEIC→JPEG conversion failed for %s", img_path)
+        return None
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
+
+
 def _safe_transcript_path(filename: str) -> Path:
     """Resolve a transcript-relative filename and verify it stays inside the
     project's transcripts/ directory.  Raises ValueError on traversal."""
@@ -1016,7 +1054,7 @@ def project_search():
     err = _require_project()
     if err:
         return err
-    q = request.args.get("q", "").strip()
+    q = request.args.get("q", "").strip()[:500]   # cap at 500 chars
     if len(q) < 2:
         return jsonify({"results": [], "total_matches": 0, "query": q})
 
@@ -1096,22 +1134,11 @@ def get_source_image(tid):
         return jsonify({"error": "Ogiltig filsökväg."}), 400
     if not img_path.exists():
         return jsonify({"error": "Källbilden saknas på disk."}), 404
-    # HEIC/HEIF not supported by browsers — convert to JPEG on-the-fly via sips (macOS built-in)
+    # HEIC/HEIF not supported by browsers — convert to JPEG on-the-fly
     if img_path.suffix.lower() in (".heic", ".heif"):
-        import subprocess, tempfile
-        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-            tmp_path = tmp.name
-        try:
-            subprocess.run(
-                ["sips", "-s", "format", "jpeg", str(img_path), "--out", tmp_path],
-                check=True, capture_output=True,
-            )
-            data = Path(tmp_path).read_bytes()
+        data = _heic_to_jpeg_bytes(img_path)
+        if data:
             return app.response_class(data, mimetype="image/jpeg")
-        except Exception:
-            logger.exception("sips HEIC→JPEG conversion failed for %s", img_path)
-        finally:
-            Path(tmp_path).unlink(missing_ok=True)
     return send_from_directory(str(img_path.parent), img_path.name)
 
 
@@ -1134,20 +1161,9 @@ def get_transcript_photo(tid, n):
     if not photo_path.exists():
         return "", 404
     if photo_path.suffix.lower() in (".heic", ".heif"):
-        import subprocess, tempfile
-        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tmp:
-            tmp_path = tmp.name
-        try:
-            subprocess.run(
-                ["sips", "-s", "format", "jpeg", str(photo_path), "--out", tmp_path],
-                check=True, capture_output=True,
-            )
-            data = Path(tmp_path).read_bytes()
+        data = _heic_to_jpeg_bytes(photo_path)
+        if data:
             return app.response_class(data, mimetype="image/jpeg")
-        except Exception:
-            logger.exception("sips HEIC→JPEG failed for %s", photo_path)
-        finally:
-            Path(tmp_path).unlink(missing_ok=True)
     ext = photo_path.suffix.lower()
     mime = {".jpg": "image/jpeg", ".jpeg": "image/jpeg",
             ".png": "image/png", ".webp": "image/webp"}.get(ext, "image/jpeg")
