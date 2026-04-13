@@ -25,3 +25,4 @@ TestProject/
 
 # Scratch files
 *.txt
+!requirements*.txt
