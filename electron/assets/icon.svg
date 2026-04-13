@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <!-- 4% transparent margin on each side: content scaled to 92%, offset 20.5px -->
-  <g transform="translate(20.5, 20.5) scale(0.92)">
+  <g transform="translate(51, 51) scale(0.80)">
     <!-- Background -->
     <rect width="512" height="512" rx="110" fill="#1e1e2e"/>
 
