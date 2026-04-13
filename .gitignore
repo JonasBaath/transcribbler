@@ -23,6 +23,9 @@ Thumbs.db
 # Project data (user content)
 TestProject/
 
+# Claude Code dev files
+.claude/
+
 # Scratch files
 *.txt
 !requirements*.txt

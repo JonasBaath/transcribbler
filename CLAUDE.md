@@ -4,7 +4,7 @@
 Lokal macOS-webbapp för kvalitativ transkript-kodning. Användaren laddar in transkript (text eller ljud), skapar en kodbok med hierarkiska koder, markerar textpassager och kopplar dem till koder. Stödjer flera kodare per projekt och beräknar inter-rater reliability (Cohen's Kappa).
 
 ## Licens
-© Jonas Bååth — [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). Fri att använda och dela, även i yrkesarbete. Vidaredistribution kräver samma licens.
+© Jonas Bååth — [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html). Fri att använda och modifiera; modifierade versioner som tillhandahålls som nätverkstjänst måste publicera sin källkod.
 
 ## Teknikstack
 - **Backend**: Python 3.9+, Flask 3.x — enkelprocess, ingen databas
