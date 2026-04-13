@@ -147,8 +147,7 @@ body.electron-mac #tools-dropdown {
 body.electron-mac #coder-badge {
   left: calc(var(--left-w, 220px) - 14px + 64px);
 }
-#topbar-logo { width: 28px; height: 12px; flex-shrink: 0; }
-#topbar-logo line { stroke: var(--accent); }
+#topbar-logo { width: 27px; height: 14px; flex-shrink: 0; }
 #topbar-logo rect  { fill: var(--accent); }
 #project-title {
   font-weight: 700; font-size: 15px; color: var(--accent); flex: 1;
@@ -380,8 +379,7 @@ body.electron-mac #coder-badge {
 .splash-wide { width: 520px; }
 
 .splash-logo { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-bottom: 20px; }
-.splash-logo-img { width: 160px; height: 67px; }
-.splash-logo-img line { stroke: var(--accent); }
+.splash-logo-img { width: 160px; height: auto; }
 .splash-logo-img rect { fill: var(--accent); }
 .splash-logo h1 { margin: 0; letter-spacing: -0.5px; }
 .brand-trans { font-weight: 700; }

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="static/img/logo.svg" width="140" alt="Transcribbler logo">
+</p>
+
 # Transcribbler
 
 Lokal skrivbordsapp för kvalitativ transkript-kodning. Ladda in transkript (text, ljud eller bild), bygg en hierarkisk kodbok och koda textpassager — allt offline, utan molntjänster.
