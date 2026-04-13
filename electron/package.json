@@ -12,7 +12,7 @@
   },
   "main": "main.js",
   "scripts": {
-    "postinstall": "node -e \"if(process.platform==='darwin'){const p=require('path').join('node_modules','electron','dist','Electron.app','Contents','Info.plist');require('child_process').execSync('plutil -replace CFBundleName -string transcribbler '+p+' && plutil -replace CFBundleDisplayName -string transcribbler '+p)}\"",
+    "postinstall": "node -e \"if(process.platform==='darwin'){const p=require('path').join('node_modules','electron','dist','Electron.app','Contents','Info.plist');require('child_process').execSync('plutil -replace CFBundleName -string Transcribbler '+p+' && plutil -replace CFBundleDisplayName -string Transcribbler '+p+' && plutil -replace CFBundleIdentifier -string se.jonasbaaath.transcribbler '+p)}\"",
     "start": "electron .",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
