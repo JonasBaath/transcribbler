@@ -25,6 +25,7 @@ TestProject/
 
 # Claude Code dev files
 .claude/
+CLAUDE.md
 
 # Scratch files
 *.txt
