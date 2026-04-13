@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>transcribbler</title>
+  <link rel="icon" type="image/svg+xml" href="/static/img/logo.svg" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+<!-- ===== SPLASH / PROJECT DIALOG ===== -->
+<div id="splash" class="overlay">
+  <div class="dialog splash-wide">
+    <div class="splash-logo">
+      <svg class="splash-logo-img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 200" fill="none" aria-label="transcribbler logo">
+        <line x1="52" y1="100" x2="272" y2="100" stroke="currentColor" stroke-width="13" stroke-linecap="round"/>
+        <line x1="100" y1="78"  x2="100" y2="122" stroke="currentColor" stroke-width="15" stroke-linecap="round"/>
+        <line x1="133" y1="58"  x2="133" y2="142" stroke="currentColor" stroke-width="15" stroke-linecap="round"/>
+        <line x1="166" y1="36"  x2="166" y2="164" stroke="currentColor" stroke-width="15" stroke-linecap="round"/>
+        <line x1="199" y1="50"  x2="199" y2="150" stroke="currentColor" stroke-width="15" stroke-linecap="round"/>
+        <line x1="232" y1="70"  x2="232" y2="130" stroke="currentColor" stroke-width="15" stroke-linecap="round"/>
+        <line x1="265" y1="84"  x2="265" y2="116" stroke="currentColor" stroke-width="15" stroke-linecap="round"/>
+        <rect x="294" y="68"  width="20" height="20" rx="2" fill="currentColor"/>
+        <rect x="330" y="56"  width="30" height="30" rx="2" fill="currentColor"/>
+        <rect x="374" y="68"  width="19" height="19" rx="2" fill="currentColor"/>
+        <rect x="294" y="110" width="42" height="42" rx="2" fill="currentColor"/>
+        <rect x="348" y="118" width="28" height="28" rx="2" fill="currentColor"/>
+        <rect x="390" y="126" width="16" height="16" rx="2" fill="currentColor"/>
+      </svg>
+      <h1><span class="brand-trans">tran</span><span class="brand-scrib">scribbler</span></h1>
+    </div>
+
+    <div class="splash-top-row">
+      <div class="tab-row">
+        <button class="tab-btn active" data-tab="open" data-i18n="tab.open">Öppna projekt</button>
+        <button class="tab-btn" data-tab="new" data-i18n="tab.new">Nytt projekt</button>
+      </div>
+      <button class="btn-sm lang-toggle" id="btn-lang-splash">EN</button>
+    </div>
+
+    <!-- Open -->
+    <div class="tab-pane active" id="tab-open">
+      <div id="recent-section">
+        <p class="recent-label" data-i18n="recent.label">Senaste projekt</p>
+        <ul id="recent-list"></ul>
+      </div>
+
+      <div class="folder-input-row">
+        <input type="text" id="open-folder"
+          data-i18n-ph="open.folder.ph"
+          placeholder="Eller ange sökväg manuellt…" />
+        <button class="btn-sm" id="btn-pick-open"
+          data-i18n-title="open.folder.title" title="Välj mapp">📂</button>
+      </div>
+      <label><span data-i18n="open.coder.label">Ditt namn (kodare)</span>
+        <input type="text" id="open-coder"
+          data-i18n-ph="open.coder.ph" placeholder="anna" />
+      </label>
+      <button class="btn-primary" id="btn-open" data-i18n="btn.open">Öppna</button>
+    </div>
+
+    <!-- New -->
+    <div class="tab-pane" id="tab-new">
+      <div class="folder-input-row">
+        <input type="text" id="new-folder"
+          data-i18n-ph="new.folder.ph"
+          placeholder="Välj eller ange projektmapp…" />
+        <button class="btn-sm" id="btn-pick-new"
+          data-i18n-title="open.folder.title" title="Välj mapp">📂</button>
+      </div>
+      <label><span data-i18n="new.name.label">Projektnamn</span>
+        <input type="text" id="new-name"
+          data-i18n-ph="new.name.ph" placeholder="Min intervjustudie" />
+      </label>
+      <label><span data-i18n="new.coder.label">Ditt namn (kodare)</span>
+        <input type="text" id="new-coder"
+          data-i18n-ph="new.coder.ph" placeholder="anna" />
+      </label>
+      <button class="btn-primary" id="btn-new" data-i18n="btn.create">Skapa projekt</button>
+    </div>
+
+    <p id="splash-error" class="error-msg"></p>
+    <p class="splash-license">
+      &copy; Jonas Bååth &middot;
+      <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener">CC BY-SA 4.0</a>
+      &middot; <span data-i18n="license.desc">Fri att använda och dela — även i yrkesarbete. Vidaredistribution kräver samma licens.</span>
+    </p>
+  </div>
+</div>
+
+<!-- ===== MAIN APP ===== -->
+<div id="app" class="hidden">
+
+  <!-- Top bar -->
+  <header id="topbar">
+    <svg id="topbar-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 200" fill="none" aria-hidden="true">
+      <line x1="52" y1="100" x2="272" y2="100" stroke-width="13" stroke-linecap="round"/>
+      <line x1="100" y1="78"  x2="100" y2="122" stroke-width="15" stroke-linecap="round"/>
+      <line x1="133" y1="58"  x2="133" y2="142" stroke-width="15" stroke-linecap="round"/>
+      <line x1="166" y1="36"  x2="166" y2="164" stroke-width="15" stroke-linecap="round"/>
+      <line x1="199" y1="50"  x2="199" y2="150" stroke-width="15" stroke-linecap="round"/>
+      <line x1="232" y1="70"  x2="232" y2="130" stroke-width="15" stroke-linecap="round"/>
+      <line x1="265" y1="84"  x2="265" y2="116" stroke-width="15" stroke-linecap="round"/>
+      <rect x="294" y="68"  width="20" height="20" rx="2"/>
+      <rect x="330" y="56"  width="30" height="30" rx="2"/>
+      <rect x="374" y="68"  width="19" height="19" rx="2"/>
+      <rect x="294" y="110" width="42" height="42" rx="2"/>
+      <rect x="348" y="118" width="28" height="28" rx="2"/>
+      <rect x="390" y="126" width="16" height="16" rx="2"/>
+    </svg>
+    <span id="project-title">transcribbler</span>
+    <span id="coder-badge"></span>
+    <div class="topbar-actions">
+      <span class="topbar-spacer"></span>
+      <!-- Settings popover -->
+      <div class="popover-wrap" id="settings-wrap">
+        <button class="btn-sm" id="btn-settings" title="Inställningar">⚙</button>
+        <div id="settings-popover" class="settings-popover hidden">
+          <label class="settings-row">
+            <input type="checkbox" id="setting-numbering" />
+            <span data-i18n="settings.numbering">Numrering av koder</span>
+          </label>
+          <label class="settings-row">
+            <input type="checkbox" id="setting-trans-order" />
+            <span data-i18n="settings.trans.order">Alfabetisk ordning av transkript</span>
+          </label>
+          <label class="settings-row">
+            <input type="checkbox" id="setting-auto-identify" />
+            <span data-i18n="settings.auto.identify">Identifiera mig automatiskt</span>
+          </label>
+          <label class="settings-row">
+            <input type="checkbox" id="setting-use-weight" />
+            <span data-i18n="settings.use.weight">Segmentvikt (0–100)</span>
+          </label>
+          <label class="settings-row">
+            <input type="checkbox" id="setting-use-waveform" />
+            <span data-i18n="settings.use.waveform">Vågform (ljudfiler)</span>
+          </label>
+          <div class="settings-divider"></div>
+          <button class="btn-sm settings-btn" id="btn-voice-profile" data-i18n="btn.voice.profile">🎤 Röstprofil</button>
+        </div>
+      </div>
+      <button class="btn-sm" id="btn-export-menu"
+        data-i18n="btn.export">Exportera</button>
+      <div class="dropdown" id="tools-dropdown">
+        <button class="btn-sm" id="btn-tools-menu"
+          data-i18n="btn.tools">Verktyg ▾</button>
+        <div class="dropdown-content" id="tools-menu">
+          <button id="btn-stats"          data-i18n="btn.stats">Statistik</button>
+          <button id="btn-irr"            data-i18n="btn.irr">IRR</button>
+          <button id="btn-codebook"       data-i18n="btn.codebook">Kodbok</button>
+          <button id="btn-codetree"       data-i18n="btn.codetree">Kodträd</button>
+          <button id="btn-code-matrix"    data-i18n="btn.code.matrix">Kodmatris</button>
+          <button id="btn-cooccurrence"   data-i18n="btn.cooccurrence">Kodöverlapp</button>
+          <button id="btn-merge"          data-i18n="btn.merge">Slå ihop filer</button>
+        </div>
+      </div>
+      <button class="btn-sm" id="btn-project-search" data-i18n="btn.project.search">Projektsök</button>
+      <button class="btn-sm" id="btn-lang">EN</button>
+      <button class="btn-sm" id="btn-theme" title="Byt tema">☀</button>
+      <button class="btn-sm btn-ghost" id="btn-close-project"
+        data-i18n="btn.switch.project">Byt projekt</button>
+    </div>
+  </header>
+
+  <div id="workspace">
+
+    <!-- LEFT: Transcript list -->
+    <aside id="sidebar-left">
+      <div class="sidebar-header">
+        <span data-i18n="sidebar.transcripts">Transkript</span>
+        <button class="btn-sidebar-import" id="btn-add-transcript"
+          data-i18n="btn.import" title="Importera transkript">Import</button>
+      </div>
+      <ul id="transcript-list"></ul>
+    </aside>
+
+    <div class="drag-handle" id="handle-left"></div>
+
+    <!-- CENTER: Transcript editor -->
+    <main id="editor-pane">
+      <div id="editor-text-area">
+        <!-- Search bar: direct child of scroll-container so sticky works reliably -->
+        <div id="search-bar" class="hidden">
+          <input type="text" id="search-input" data-i18n-ph="search.ph" placeholder="Sök i transkript…" />
+          <span id="search-count"></span>
+          <button class="btn-sm" id="btn-search-prev" title="Föregående (Shift+Enter)">↑</button>
+          <button class="btn-sm" id="btn-search-next" title="Nästa (Enter)">↓</button>
+          <button class="btn-sm btn-ghost" id="btn-search-clear" title="Stäng (Esc)">✕</button>
+        </div>
+
+        <div id="editor-placeholder">
+          <p data-i18n="editor.placeholder">Välj ett transkript i listan till vänster.</p>
+        </div>
+        <div id="editor-content" class="hidden">
+          <div id="editor-meta">
+            <span id="editor-title"></span>
+            <button class="btn-icon btn-rename-transcript" id="btn-rename-transcript" title="Byt namn">✎</button>
+            <span id="ann-count-badge"></span>
+          </div>
+
+          <!-- Audio player (shown only for audio-sourced transcripts) -->
+          <div id="audio-player-wrap" class="hidden">
+            <audio id="audio-player" controls preload="metadata"></audio>
+            <div id="waveform-controls" class="hidden">
+              <button id="wf-play-pause" title="Spela/Pausa">▶</button>
+              <span id="wf-time">0:00 / 0:00</span>
+              <input id="wf-volume" type="range" min="0" max="1" step="0.05" value="1" title="Volym">
+              <div id="waveform-zoom">
+                <button id="waveform-zoom-out" title="Zooma ut">−</button>
+                <button id="waveform-zoom-in"  title="Zooma in">+</button>
+              </div>
+            </div>
+            <span id="audio-model-badge"></span>
+          </div>
+
+          <!-- Waveform (shown for audio transcripts when use_waveform is enabled) -->
+          <div id="waveform-wrap" class="hidden">
+            <div id="waveform"></div>
+          </div>
+
+          <!-- Format toolbar -->
+          <div id="editor-toolbar" class="hidden">
+            <button class="fmt-btn" id="fmt-a-minus" title="Minska teckenstorlek">A−</button>
+            <button class="fmt-btn" id="fmt-a-plus" title="Öka teckenstorlek">A+</button>
+            <span class="fmt-sep"></span>
+            <button class="fmt-btn" id="fmt-sans" title="Sans-serif">Sans</button>
+            <button class="fmt-btn" id="fmt-serif" title="Serif">Serif</button>
+            <span class="fmt-sep"></span>
+            <button class="fmt-btn" id="fmt-bold" title="Fetstil (markera text först)"><b>B</b></button>
+            <button class="fmt-btn" id="fmt-italic" title="Kursiv (markera text först)"><i>I</i></button>
+            <span class="fmt-sep" id="fmt-sep-source"></span>
+            <button class="fmt-btn hidden" id="btn-source-img" title="Visa källbild">🖼</button>
+            <span class="fmt-sep"></span>
+            <button class="fmt-btn" id="btn-edit-text" title="Redigera text">✎</button>
+          </div>
+
+          <div id="transcript-text"></div>
+          <div id="text-edit-wrap" class="hidden">
+            <textarea id="text-edit-area" spellcheck="false"></textarea>
+            <div class="text-edit-actions">
+              <button class="btn-primary btn-sm" id="btn-text-save">Spara</button>
+              <button class="btn-ghost btn-sm" id="btn-text-cancel">Avbryt</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Drag handle between editor and source image panel -->
+      <div class="drag-handle hidden" id="handle-source"></div>
+
+      <!-- Source image panel (shown for image-sourced transcripts and/or notes with photos) -->
+      <div id="source-img-panel" class="hidden">
+        <div class="source-img-hdr">
+          <span id="source-panel-title">Källbild</span>
+          <button class="btn-sm btn-ghost" id="btn-ocr-photos" title="Extrahera text från foton (OCR)" style="display:none">⊙</button>
+          <button class="btn-sm btn-ghost" id="btn-ocr-boxes" title="Visa igenkänd text">⊞</button>
+          <button class="btn-sm btn-ghost" id="btn-close-source">✕</button>
+        </div>
+        <div class="source-img-scroll">
+          <div id="source-img-wrap">
+            <img id="source-img" src="" alt="källbild" />
+            <svg id="ocr-box-overlay" class="hidden" viewBox="0 0 1 1" preserveAspectRatio="none"></svg>
+          </div>
+          <div id="note-photos-container" class="hidden"></div>
+        </div>
+      </div>
+    </main>
+
+    <div class="drag-handle" id="handle-right"></div>
+
+    <!-- RIGHT: Codebook -->
+    <aside id="sidebar-right">
+      <div class="sidebar-header">
+        <span data-i18n="sidebar.codebook">Kodbok</span>
+        <button class="btn-icon" id="btn-add-code"
+          data-i18n-title="btn.add.code.title" title="Ny kod">+</button>
+      </div>
+      <div id="codebook-search-wrap">
+        <input type="text" id="codebook-search"
+          data-i18n-ph="codebook.search.ph" placeholder="Filtrera koder…" />
+      </div>
+      <div id="codebook-tree"></div>
+    </aside>
+
+  </div><!-- /workspace -->
+
+</div><!-- /app -->
+
+<!-- ===== MODALS ===== -->
+
+<!-- Transcript context menu -->
+<div id="transcript-ctx-menu" class="ctx-menu hidden">
+  <div class="ctx-item" id="ctx-memo">📝 Memo</div>
+  <div class="ctx-item" id="ctx-search" data-i18n="ctx.search">🔍 Sök</div>
+  <div class="ctx-item" id="ctx-categorize" data-i18n="ctx.categorize">📁 Kategorisera</div>
+</div>
+
+<!-- Code context menu -->
+<div id="code-ctx-menu" class="ctx-menu hidden">
+  <div class="ctx-item" id="ctx-code-rename" data-i18n="ctx.code.rename">✏️ Byt namn</div>
+</div>
+
+<!-- Transcript memo modal -->
+<div id="modal-memo" class="overlay hidden">
+  <div class="dialog">
+    <h2 id="memo-modal-title">Memo</h2>
+    <textarea id="modal-memo-text" rows="8" data-i18n-ph="memo.ph"
+      placeholder="Memo för detta transkript…"></textarea>
+    <div class="dialog-actions">
+      <button class="btn-primary" id="btn-memo-save" data-i18n="btn.save">Spara</button>
+      <button class="btn-ghost" id="btn-memo-cancel" data-i18n="btn.cancel">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add transcript -->
+<div id="modal-transcript" class="overlay hidden">
+  <div class="dialog">
+    <h2 data-i18n="trans.modal.title">Lägg till transkript</h2>
+    <label><span data-i18n="trans.file.label">Välj fil (.txt, .docx, .mp3, .wav …)</span>
+      <div id="file-drop-zone">
+        <input type="file" id="trans-file"
+          accept=".txt,.md,.docx,.odt,.scribbler,.nsenc,.zip,.jpg,.jpeg,.png,.bmp,.tiff,.tif,.webp,.heic,.heif,.mp3,.wav,.m4a,.mp4,.ogg,.flac,.webm" multiple />
+        <div id="file-drop-label">
+          <span id="file-drop-icon">📂</span>
+          <span id="file-drop-text" data-i18n="trans.drop.text">Klicka för att välja fil, eller dra hit</span>
+        </div>
+        <ul id="file-selected-list"></ul>
+      </div>
+    </label>
+    <label><span data-i18n="trans.name.label">Namn (valfritt — används om du väljer en enda fil)</span>
+      <input type="text" id="trans-name"
+        data-i18n-ph="trans.name.ph" placeholder="Anna, 2024-03-12" />
+    </label>
+
+    <!-- Scribbler password (shown/hidden by JS when .scribbler/.nsenc file selected) -->
+    <div id="scribbler-options" class="hidden">
+      <label>
+        <span data-i18n="scribbler.password.label">Lösenord (från Notescribbler)</span>
+        <input type="password" id="scribbler-password"
+          data-i18n-ph="scribbler.password.ph" placeholder="Exportlösenord" autocomplete="off" />
+      </label>
+    </div>
+
+    <!-- Image OCR option (shown/hidden by JS when image file selected) -->
+    <div id="image-options" class="hidden">
+      <label class="checkbox-row">
+        <input type="checkbox" id="image-ocr" checked />
+        <span data-i18n="image.ocr.label">Extrahera text med OCR</span>
+      </label>
+    </div>
+
+    <!-- Zip notice (shown/hidden by JS when .zip file selected) -->
+    <div id="zip-notice" class="hidden">
+      <p class="diar-hint">⚠ Zip-filen importeras som klartext — filerna är inte lösenordsskyddade. Välj <strong>.nsenc</strong> i Notescribbler för krypterad export.</p>
+    </div>
+
+    <!-- Audio-only options (shown/hidden by JS) -->
+    <div id="audio-options" class="hidden">
+      <!-- Language / model choice -->
+      <label>
+        <span data-i18n="trans.lang_choice.label">Transkriptionsmodell</span>
+        <select id="language-choice">
+          <option value="autodetect" data-i18n="lang.autodetect">Autodetect — KB-Whisper (rekommenderas)</option>
+          <option value="sv"         data-i18n="lang.sv">Svenska — KB-Whisper</option>
+          <option value="en"         data-i18n="lang.en">Engelska — Whisper</option>
+          <option value="other"      data-i18n="lang.other">Övrigt — Whisper (autodetect)</option>
+        </select>
+      </label>
+
+      <!-- Whisper model size — only relevant when using openai-whisper (en / other) -->
+      <div id="whisper-model-wrap" style="display:none">
+        <details id="whisper-options">
+          <summary data-i18n="trans.whisper.summary">Whisper-inställningar</summary>
+          <label><span data-i18n="trans.model.label">Modell</span>
+            <select id="trans-model">
+              <option value="tiny">tiny (snabb, lägre kvalitet)</option>
+              <option value="base">base</option>
+              <option value="small">small</option>
+              <option value="medium" selected>medium (rekommenderas)</option>
+              <option value="large-v3">large-v3 (bäst kvalitet)</option>
+            </select>
+          </label>
+        </details>
+      </div>
+
+      <!-- Diarization section -->
+      <div id="diar-section">
+        <div class="diar-row">
+          <label>
+            <input type="checkbox" id="diar-enabled" />
+            <span data-i18n="diar.label">Diarization (talaridentifiering)</span>
+          </label>
+        </div>
+
+        <div id="diar-options" class="hidden">
+          <div id="diar-num-row">
+            <span data-i18n="diar.num.label">Antal talare:</span>
+            <input type="number" id="diar-num-speakers" min="1" max="20"
+              data-i18n-ph="diar.num.ph" placeholder="t.ex. 2" />
+          </div>
+          <p class="diar-hint" data-i18n="diar.num.hint">Lämna tomt för automatisk detektering</p>
+
+          <details id="diar-advanced-wrap">
+            <summary data-i18n="diar.advanced">Avancerade inställningar</summary>
+            <div class="diar-mm-row">
+              <label>
+                <span data-i18n="diar.min.label">Min talare:</span>
+                <input type="number" id="diar-min-speakers" min="1" max="20" />
+              </label>
+              <label>
+                <span data-i18n="diar.max.label">Max talare:</span>
+                <input type="number" id="diar-max-speakers" min="1" max="20" />
+              </label>
+            </div>
+
+            <div class="diar-adv-grid">
+              <!-- Segmentation threshold -->
+              <div class="tooltip-wrap">
+                <span data-i18n="diar.seg.label">Segmenteringströskel</span>
+                <span class="tip-icon">i</span>
+                <div class="tip-box">
+                  Hur känslig modellen är för svagt ljud.<br>
+                  <b>↑ Högre</b>: renare, ignorerar mummel<br>
+                  <b>↓ Lägre</b>: plockar upp mer, risk för brus<br><br>
+                  <i>Tumregel: börja på 0,50 och höj om du får för många korta segment.</i>
+                </div>
+              </div>
+              <input type="range" id="diar-seg-thr" min="0.10" max="0.90" step="0.05" value="0.50" />
+              <span class="range-val" id="diar-seg-val">0.50</span>
+
+              <!-- Clustering threshold -->
+              <div class="tooltip-wrap">
+                <span data-i18n="diar.clu.label">Klustringsttröskel</span>
+                <span class="tip-icon">i</span>
+                <div class="tip-box">
+                  Hur lika röster måste vara för att räknas som samma talare.<br>
+                  <b>↑ Höj</b> om en person delas upp i flera<br>
+                  <b>↓ Sänk</b> om olika talare slås ihop<br><br>
+                  <i>Tumregel: börja på 0,70.</i>
+                </div>
+              </div>
+              <input type="range" id="diar-clu-thr" min="0.30" max="0.90" step="0.05" value="0.70" />
+              <span class="range-val" id="diar-clu-val">0.70</span>
+            </div>
+          </details>
+
+          <!-- Auto-identify from voice profile -->
+          <div id="diar-auto-identify-row" class="diar-row hidden">
+            <label>
+              <input type="checkbox" id="diar-auto-identify" />
+              <span data-i18n="diar.auto.identify">Identifiera min röst automatiskt</span>
+            </label>
+            <span id="diar-voice-status" class="diar-voice-status"></span>
+          </div>
+
+          <!-- Word-level timestamps — only relevant for KB-Whisper (sv/autodetect) -->
+          <div id="diar-word-ts-row" class="diar-row hidden">
+            <label>
+              <input type="checkbox" id="diar-word-timestamps" />
+              <span data-i18n="diar.word.ts.label">Exakt talaruppdelning (word-level)</span>
+            </label>
+            <p class="diar-hint" data-i18n="diar.word.ts.warning">⚠ ~3× längre tid. 10 min ljud ≈ 50 min; 1 tim ≈ 5 tim.</p>
+          </div>
+        </div><!-- /diar-options -->
+      </div><!-- /diar-section -->
+    </div><!-- /audio-options -->
+
+    <div class="dialog-actions">
+      <button class="btn-primary" id="btn-trans-confirm" data-i18n="btn.trans.confirm">Lägg till</button>
+      <button class="btn-ghost" id="btn-trans-cancel" data-i18n="btn.cancel">Avbryt</button>
+    </div>
+    <p id="trans-error" class="error-msg"></p>
+
+    <!-- Progress bar (shown during async transcription) -->
+    <div id="trans-progress-wrap" class="hidden">
+      <div id="trans-progress-label">
+        <span id="trans-progress-stage">Transkriberar…</span>
+        <span id="trans-progress-pct">0%</span>
+      </div>
+      <div id="trans-progress-bar-outer">
+        <div id="trans-progress-bar-inner"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- HF Token modal -->
+<div id="modal-hf-token" class="overlay hidden">
+  <div class="dialog">
+    <h2 data-i18n="hf.modal.title">Hugging Face-token krävs</h2>
+    <div class="hf-steps">
+      <p>1. <span data-i18n="hf.step1">Gå till modellsidan och acceptera licensvillkoren:</span><br>
+        <a href="https://huggingface.co/pyannote/speaker-diarization-3.1"
+           target="_blank">huggingface.co/pyannote/speaker-diarization-3.1 ↗</a>
+      </p>
+      <p>2. <span data-i18n="hf.step2">Skapa ett token (Read-behörighet räcker):</span><br>
+        <a href="https://huggingface.co/settings/tokens" target="_blank">hf.co/settings/tokens ↗</a>
+      </p>
+    </div>
+    <label>
+      <span data-i18n="hf.token.label">Ditt token:</span>
+      <div class="hf-token-input-row">
+        <input type="password" id="hf-token-input" data-i18n-ph="hf.token.ph" placeholder="hf_…" />
+      </div>
+    </label>
+    <p id="hf-token-status"></p>
+    <div class="dialog-actions">
+      <button class="btn-primary" id="btn-hf-save" data-i18n="hf.save">Spara token</button>
+      <button class="btn-ghost" id="btn-hf-cancel" data-i18n="btn.cancel">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<!-- Speaker naming dialog -->
+<div id="modal-speaker-names" class="overlay hidden">
+  <div class="dialog">
+    <h2 data-i18n="spk.modal.title">Döp om talare</h2>
+    <p class="info-msg" data-i18n="spk.modal.hint">
+      Ange valfria namn för varje talare (lämna tomt för att behålla automatiskt ID).
+    </p>
+    <div class="speaker-name-rows" id="speaker-name-rows">
+      <!-- Rows injected by JS -->
+    </div>
+    <div class="dialog-actions">
+      <button class="btn-primary" id="btn-spk-confirm" data-i18n="spk.confirm">Lägg till transkript</button>
+      <button class="btn-ghost" id="btn-spk-cancel" data-i18n="btn.cancel">Avbryt</button>
+    </div>
+    <p id="spk-error" class="error-msg"></p>
+  </div>
+</div>
+
+<!-- Batch speaker naming dialog (multi-file) -->
+<div id="modal-batch-speakers" class="overlay hidden">
+  <div class="dialog dialog-wide">
+    <h2 data-i18n="batch.spk.title">Namnge talare för alla filer</h2>
+    <p class="info-msg" id="batch-spk-hint" data-i18n="batch.spk.hint">
+      Transkriberingen är klar. Fyll i namn på talare för varje fil — lämna tomt för att behålla automatiska ID:n.
+    </p>
+    <div id="batch-speaker-list" class="batch-speaker-list">
+      <!-- Per-file sections injected by JS -->
+    </div>
+    <div class="dialog-actions">
+      <button class="btn-primary" id="btn-batch-spk-save" data-i18n="batch.spk.save">Spara alla</button>
+      <button class="btn-ghost" id="btn-batch-spk-skip" data-i18n="batch.spk.skip">Spara med standardnamn</button>
+    </div>
+    <p id="batch-spk-error" class="error-msg"></p>
+    <div id="batch-spk-progress" class="hidden">
+      <div id="batch-spk-progress-label">Sparar fil <span id="batch-spk-cur">0</span>/<span id="batch-spk-total">0</span>…</div>
+    </div>
+  </div>
+</div>
+
+<!-- Voice profile modal -->
+<div id="modal-voice-profile" class="overlay hidden">
+  <div class="dialog">
+    <h2 data-i18n="voice.modal.title">🎤 Röstprofil</h2>
+    <p data-i18n="voice.modal.desc">Ladda upp ett ljudklipp (30–120 s) där bara du pratar. Programmet lär sig din röst och kan identifiera dig automatiskt vid framtida transkriptioner.</p>
+
+    <!-- Current profile status -->
+    <div id="voice-profile-status-box" class="voice-status-box hidden">
+      <span class="voice-status-icon">✓</span>
+      <div>
+        <strong data-i18n="voice.status.saved">Röstprofil sparad</strong>
+        <div id="voice-profile-meta" class="voice-profile-meta"></div>
+      </div>
+      <button class="btn-danger btn-sm" id="btn-voice-delete" data-i18n="btn.voice.delete">Ta bort</button>
+    </div>
+
+    <!-- Upload section -->
+    <label>
+      <span data-i18n="voice.upload.label">Välj ljudfil (WAV, MP3, M4A…)</span>
+      <input type="file" id="voice-file-input" accept="audio/*" />
+    </label>
+
+    <div id="voice-extract-progress" class="hidden">
+      <span id="voice-extract-stage" data-i18n="voice.extracting">Extraherar röstprofil…</span>
+    </div>
+
+    <p id="voice-modal-error" class="error-msg"></p>
+
+    <div class="dialog-actions">
+      <button class="btn-primary" id="btn-voice-extract" data-i18n="btn.voice.extract">Spara röstprofil</button>
+      <button class="btn-ghost" id="btn-voice-cancel" data-i18n="btn.cancel">Stäng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add/edit code -->
+<div id="modal-code" class="overlay hidden">
+  <div class="dialog">
+    <h2 id="code-modal-title" data-i18n="code.new.title">Ny kod</h2>
+    <input type="hidden" id="code-edit-id" />
+    <label><span data-i18n="code.name.label">Namn</span>
+      <input type="text" id="code-name" />
+    </label>
+    <label><span data-i18n="code.parent.label">Överordnad kod (tema)</span>
+      <select id="code-parent">
+        <option value="" data-i18n="code.parent.none">— ingen (toppnivå) —</option>
+      </select>
+    </label>
+    <label><span data-i18n="code.color.label">Färg</span>
+      <!-- Hidden input holds the selected color value -->
+      <input type="hidden" id="code-color" value="#0072B2" />
+      <div id="color-palette">
+        <div class="palette-preview-row">
+          <div id="palette-selected-dot" class="palette-selected-dot"></div>
+          <span id="palette-selected-hex" class="palette-hex-label">#0072B2</span>
+        </div>
+        <div id="palette-primary" class="palette-row"></div>
+        <button type="button" class="btn-sm palette-more-btn" id="btn-palette-more">Visa fler ▾</button>
+        <div id="palette-extended" class="palette-row" style="display:none"></div>
+        <div id="palette-shades-wrap" style="display:none">
+          <div class="palette-section-label">Nyanser av föräldern</div>
+          <div id="palette-shades" class="palette-row"></div>
+        </div>
+      </div>
+    </label>
+    <label><span data-i18n="code.desc.label">Beskrivning</span>
+      <textarea id="code-description" rows="3"></textarea>
+    </label>
+    <div class="dialog-actions">
+      <button class="btn-primary" id="btn-code-confirm" data-i18n="btn.save">Spara</button>
+      <button class="btn-ghost" id="btn-code-cancel" data-i18n="btn.cancel">Avbryt</button>
+      <button class="btn-danger hidden" id="btn-code-delete" data-i18n="btn.delete.code">Ta bort kod</button>
+    </div>
+    <p id="code-error" class="error-msg"></p>
+  </div>
+</div>
+
+<!-- Annotation popup (appears near selection) -->
+<div id="ann-popup" class="hidden">
+  <div id="ann-popup-inner">
+    <input type="text" id="ann-search" data-i18n-ph="ann.search.ph"
+      placeholder="Sök kod…" autocomplete="off" class="ann-search-input" />
+    <div id="ann-code-list"></div>
+    <div id="ann-create-row" class="hidden">
+      <button class="ann-create-btn" id="btn-ann-create-code"></button>
+    </div>
+    <div id="ann-memo-row">
+      <input type="text" id="ann-memo"
+        data-i18n-ph="ann.memo.ph" placeholder="Memo (valfritt)" />
+    </div>
+    <div id="ann-weight-row" class="hidden">
+      <label class="ann-weight-label">
+        <span data-i18n="ann.weight.label">Vikt</span>
+        <input type="range" id="ann-weight" min="0" max="100" value="50" />
+        <span id="ann-weight-val">50</span>
+      </label>
+    </div>
+    <div class="ann-popup-actions">
+      <button class="btn-primary btn-sm" id="btn-ann-confirm" data-i18n="btn.code">Koda</button>
+      <button class="btn-ghost btn-sm" id="btn-ann-cancel" data-i18n="btn.cancel">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<!-- Annotation detail (click on highlight) -->
+<div id="ann-detail" class="hidden">
+  <div id="ann-detail-inner">
+    <div id="ann-detail-code"></div>
+    <input type="text" id="ann-detail-memo"
+      data-i18n-ph="ann.detail.memo.ph" placeholder="Memo" />
+    <div id="ann-detail-weight-row" class="hidden">
+      <label class="ann-weight-label">
+        <span data-i18n="ann.weight.label">Vikt</span>
+        <input type="range" id="ann-detail-weight" min="0" max="100" value="50" />
+        <span id="ann-detail-weight-val">50</span>
+      </label>
+    </div>
+    <div id="ann-detail-anchor-row" class="hidden">
+      <label class="ann-anchor-label">
+        <input type="checkbox" id="ann-detail-anchor" />
+        <span data-i18n="ann.anchor.label">Nyckelpassage</span>
+      </label>
+    </div>
+    <div class="ann-popup-actions">
+      <button class="btn-primary btn-sm" id="btn-ann-update" data-i18n="btn.update">Uppdatera</button>
+      <button class="btn-danger btn-sm" id="btn-ann-remove" data-i18n="btn.remove">Ta bort</button>
+      <button class="btn-ghost btn-sm" id="btn-ann-detail-cancel" data-i18n="btn.close">Stäng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Merge dialog -->
+<div id="modal-merge" class="overlay hidden">
+  <div class="dialog">
+    <h2 data-i18n="merge.title">Slå ihop kodningsfiler</h2>
+    <p data-i18n="merge.desc">Klistra in sökvägen till en kollegas .json-kodningsfil.</p>
+    <label><span data-i18n="merge.path.label">Sökväg till fil</span>
+      <input type="text" id="merge-path"
+        data-i18n-ph="merge.path.ph"
+        placeholder="/Users/du/Downloads/transkript1.bjorn.json" />
+    </label>
+    <div class="dialog-actions">
+      <button class="btn-primary" id="btn-merge-confirm" data-i18n="btn.merge.confirm">Importera</button>
+      <button class="btn-ghost" id="btn-merge-cancel" data-i18n="btn.cancel">Avbryt</button>
+    </div>
+    <p id="merge-result" class="info-msg"></p>
+    <p id="merge-error" class="error-msg"></p>
+  </div>
+</div>
+
+<!-- Statistics modal -->
+<div id="modal-stats" class="overlay hidden">
+  <div class="dialog dialog-wide">
+    <h2 data-i18n="stats.title">Statistik</h2>
+    <div id="stats-scope-row">
+      <label class="inline-label">
+        <input type="radio" name="stats-scope" value="all" checked /> <span data-i18n="stats.scope.all">Hela projektet</span>
+      </label>
+      <label class="inline-label">
+        <input type="radio" name="stats-scope" value="transcript" id="stats-scope-transcript" />
+        <span data-i18n="stats.scope.transcript">Detta transkript</span>
+      </label>
+    </div>
+    <div id="stats-body"></div>
+    <div class="dialog-actions">
+      <button class="btn-ghost" id="btn-stats-close" data-i18n="btn.close">Stäng</button>
+    </div>
+  </div>
+</div>
+
+<!-- IRR modal -->
+<div id="modal-irr" class="overlay hidden">
+  <div class="dialog dialog-wide">
+    <h2 data-i18n="irr.title">Inter-rater reliability</h2>
+    <div id="irr-setup">
+      <div class="irr-coder-row">
+        <label><span data-i18n="irr.coder_a">Kodare A</span>
+          <select id="irr-coder-a"></select>
+        </label>
+        <label><span data-i18n="irr.coder_b">Kodare B</span>
+          <select id="irr-coder-b"></select>
+        </label>
+        <label><span data-i18n="irr.transcript">Transkript</span>
+          <select id="irr-transcript"></select>
+        </label>
+      </div>
+      <button class="btn-primary" id="btn-irr-compute" data-i18n="irr.compute">Beräkna</button>
+    </div>
+    <div id="irr-result" class="hidden">
+      <div id="irr-kappa-display"></div>
+      <table id="irr-table">
+        <thead>
+          <tr>
+            <th data-i18n="irr.col.code">Kod</th>
+            <th data-i18n="irr.col.coder_a">Kodare A (tecken)</th>
+            <th data-i18n="irr.col.coder_b">Kodare B (tecken)</th>
+            <th data-i18n="irr.col.agreement">Gemensamt</th>
+          </tr>
+        </thead>
+        <tbody id="irr-table-body"></tbody>
+      </table>
+    </div>
+    <p id="irr-error" class="error-msg"></p>
+    <div class="dialog-actions">
+      <button class="btn-ghost" id="btn-irr-close" data-i18n="btn.close">Stäng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Codebook manager modal -->
+<div id="modal-codebook" class="overlay hidden">
+  <div class="dialog dialog-wide">
+    <div class="cb-mgr-header">
+      <h2 data-i18n="btn.codebook">Kodbok</h2>
+      <div class="codetree-export-bar">
+        <a class="btn-sm" href="/api/export/codebook/csv"  download="kodbok.csv">CSV</a>
+        <a class="btn-sm" href="/api/export/markdown/codebook" download="kodbok.md">MD</a>
+        <a class="btn-sm" href="/api/export/codetree/docx" download="kodbok.docx">DOCX</a>
+        <a class="btn-sm" href="/api/export/codetree/odt"  download="kodbok.odt">ODT</a>
+      </div>
+    </div>
+    <div id="codebook-mgr-list"></div>
+    <div class="dialog-actions">
+      <button class="btn-primary" id="btn-cb-add" data-i18n="code.new.title">Ny kod</button>
+      <button class="btn-ghost"   id="btn-codebook-close" data-i18n="btn.close">Stäng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Code tree modal -->
+<div id="modal-codetree" class="overlay hidden">
+  <div class="dialog dialog-wide">
+    <h2 data-i18n="btn.codetree">Kodträd</h2>
+    <div class="codetree-export-bar">
+      <button class="btn-sm" id="btn-ct-png">PNG</button>
+      <button class="btn-sm" id="btn-ct-pdf">PDF</button>
+      <a class="btn-sm" href="/api/export/markdown/codebook" download="kodbok.md">MD</a>
+      <a class="btn-sm" id="btn-ct-docx" href="/api/export/codetree/docx" download="kodtrad.docx">DOCX</a>
+      <a class="btn-sm" id="btn-ct-odt"  href="/api/export/codetree/odt"  download="kodtrad.odt">ODT</a>
+    </div>
+    <div id="codetree-content"></div>
+    <div class="dialog-actions">
+      <button class="btn-ghost" id="btn-codetree-close" data-i18n="btn.close">Stäng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Export modal -->
+<div id="modal-export" class="overlay hidden">
+  <div class="dialog">
+    <h2 data-i18n="export.modal.title">Exportera</h2>
+    <div class="export-field-group">
+      <label class="export-field-label" data-i18n="export.folder.label">Destinationsmapp</label>
+      <div class="export-folder-row">
+        <input type="text" id="export-folder-input" placeholder="/Users/…" autocomplete="off" />
+        <button class="btn-sm" id="btn-export-browse" data-i18n="export.browse">Bläddra…</button>
+      </div>
+    </div>
+    <div class="export-field-group">
+      <label class="export-field-label" data-i18n="export.formats.label">Format</label>
+      <label class="settings-row"><input type="checkbox" id="exp-fmt-csv" checked />
+        <span data-i18n="exp.csv">CSV (alla)</span></label>
+      <label class="settings-row"><input type="checkbox" id="exp-fmt-csv-tidy" />
+        <span data-i18n="exp.csv.tidy">CSV tidy (R/Python)</span></label>
+      <label class="settings-row"><input type="checkbox" id="exp-fmt-md-codes" />
+        <span data-i18n="exp.md.codes">Markdown – citat per kod</span></label>
+      <label class="settings-row"><input type="checkbox" id="exp-fmt-md-codebook" />
+        <span data-i18n="exp.md.codebook">Markdown – kodbok</span></label>
+      <label class="settings-row"><input type="checkbox" id="exp-fmt-md-transcript" />
+        <span data-i18n="exp.md.transcript">Markdown – detta transkript</span></label>
+      <label class="settings-row"><input type="checkbox" id="exp-fmt-qdpx" />
+        <span data-i18n="exp.qdpx">QDPX (REFI-QDA)</span></label>
+    </div>
+    <div id="export-status"></div>
+    <div class="dialog-actions">
+      <button class="btn-primary" id="btn-export-confirm"
+        data-i18n="export.btn.confirm">Exportera</button>
+      <button class="btn-ghost" id="btn-export-cancel"
+        data-i18n="btn.cancel">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<!-- Categorize transcripts modal -->
+<div id="modal-categorize" class="overlay hidden">
+  <div class="dialog">
+    <h2 data-i18n="cat.modal.title">Kategorisera transkript</h2>
+    <label>
+      <input type="text" id="cat-name-input" list="cat-datalist"
+        data-i18n-ph="cat.input.ph" placeholder="Kategorinamn…"
+        autocomplete="off" />
+      <datalist id="cat-datalist"></datalist>
+    </label>
+    <div class="dialog-actions">
+      <button class="btn-primary" id="btn-cat-save" data-i18n="btn.save">Spara</button>
+      <button class="btn-ghost" id="btn-cat-remove" data-i18n="btn.cat.remove">Ta bort kategori</button>
+      <button class="btn-ghost" id="btn-cat-cancel" data-i18n="btn.cancel">Avbryt</button>
+    </div>
+  </div>
+</div>
+
+<!-- Project search modal -->
+<div id="modal-project-search" class="overlay hidden">
+  <div class="dialog dialog-proj-search">
+    <div class="proj-search-top">
+      <h2 class="dialog-title" data-i18n="proj.search.title">Sök i projekt</h2>
+      <button class="btn-icon" id="btn-proj-search-close" title="Stäng">✕</button>
+    </div>
+    <div class="proj-search-input-row">
+      <input type="text" id="proj-search-input"
+        data-i18n-ph="proj.search.ph" placeholder="Sökterm…"
+        autocomplete="off" spellcheck="false" />
+      <button class="btn-primary" id="btn-proj-search-run" data-i18n="proj.search.btn">Sök</button>
+    </div>
+    <div id="proj-search-summary" class="proj-search-summary"></div>
+    <div id="proj-search-results" class="proj-search-results"></div>
+  </div>
+</div>
+
+<!-- Code definition tooltip -->
+<div id="code-tooltip" class="code-tooltip hidden"></div>
+
+<!-- Code matrix modal (transkript × kod) -->
+<div id="modal-code-matrix" class="overlay hidden">
+  <div class="dialog dialog-wide">
+    <div class="cb-mgr-header">
+      <h2 data-i18n="btn.code.matrix">Kodmatris</h2>
+      <a class="btn-sm" id="link-code-matrix-csv" href="/api/export/code-matrix/csv" download="kodmatris.csv">CSV</a>
+    </div>
+    <div id="code-matrix-wrap" class="matrix-scroll-wrap"></div>
+    <div class="dialog-actions">
+      <button class="btn-ghost" id="btn-code-matrix-close" data-i18n="btn.close">Stäng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cooccurrence modal (kod × kod) -->
+<div id="modal-cooccurrence" class="overlay hidden">
+  <div class="dialog dialog-wide">
+    <div class="cb-mgr-header">
+      <h2 data-i18n="btn.cooccurrence">Kodöverlapp</h2>
+      <a class="btn-sm" id="link-cooccurrence-csv" href="/api/export/cooccurrence/csv" download="kodsamforekomst.csv">CSV</a>
+    </div>
+    <div id="cooccurrence-wrap" class="matrix-scroll-wrap"></div>
+    <div class="dialog-actions">
+      <button class="btn-ghost" id="btn-cooccurrence-close" data-i18n="btn.close">Stäng</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/translations.js?v=18"></script>
+<script src="/static/js/wavesurfer.min.js"></script>
+<script src="/static/js/app.js?v=54"></script>
+</body>
+</html>

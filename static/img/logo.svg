@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 200" fill="none">
+  <line x1="52" y1="100" x2="272" y2="100" stroke="currentColor" stroke-width="13" stroke-linecap="round"/>
+  <line x1="100" y1="78"  x2="100" y2="122" stroke="currentColor" stroke-width="15" stroke-linecap="round"/>
+  <line x1="133" y1="58"  x2="133" y2="142" stroke="currentColor" stroke-width="15" stroke-linecap="round"/>
+  <line x1="166" y1="36"  x2="166" y2="164" stroke="currentColor" stroke-width="15" stroke-linecap="round"/>
+  <line x1="199" y1="50"  x2="199" y2="150" stroke="currentColor" stroke-width="15" stroke-linecap="round"/>
+  <line x1="232" y1="70"  x2="232" y2="130" stroke="currentColor" stroke-width="15" stroke-linecap="round"/>
+  <line x1="265" y1="84"  x2="265" y2="116" stroke="currentColor" stroke-width="15" stroke-linecap="round"/>
+  <rect x="294" y="68"  width="20" height="20" rx="2" fill="currentColor"/>
+  <rect x="330" y="56"  width="30" height="30" rx="2" fill="currentColor"/>
+  <rect x="374" y="68"  width="19" height="19" rx="2" fill="currentColor"/>
+  <rect x="294" y="110" width="42" height="42" rx="2" fill="currentColor"/>
+  <rect x="348" y="118" width="28" height="28" rx="2" fill="currentColor"/>
+  <rect x="390" y="126" width="16" height="16" rx="2" fill="currentColor"/>
+</svg>
