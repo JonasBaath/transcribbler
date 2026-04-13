@@ -2,6 +2,11 @@
   "name": "transcribbler",
   "version": "1.0.0",
   "description": "Lokal app for kvalitativ transkript-kodning",
+  "author": "Jonas Baath",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JonasBaath/transcribbler.git"
+  },
   "main": "main.js",
   "scripts": {
     "postinstall": "node -e \"if(process.platform==='darwin'){const p=require('path').join('node_modules','electron','dist','Electron.app','Contents','Info.plist');require('child_process').execSync('plutil -replace CFBundleName -string transcribbler '+p+' && plutil -replace CFBundleDisplayName -string transcribbler '+p)}\"",
