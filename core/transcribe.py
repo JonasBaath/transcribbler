@@ -53,11 +53,62 @@ def _patch_torch_load():
 _patch_torch_load()
 
 # ---------------------------------------------------------------------------
-# Module-level model caches (loaded once, never evicted)
+# Module-level model caches (loaded once, evicted after inactivity)
 # ---------------------------------------------------------------------------
 _FW_MODEL_CACHE: dict = {}  # cache_key → faster_whisper.WhisperModel instance
 _ECAPA_MODEL = None         # SpeechBrain ECAPA-TDNN for speaker embeddings
 _DIAR_PIPELINE = None       # pyannote SpeakerDiarization pipeline (cached, token-agnostic)
+_DIAR_DEVICE = "cpu"        # device the diarization pipeline is running on
+
+# ---------------------------------------------------------------------------
+# Model eviction timer — frees cached models after MODEL_IDLE_TIMEOUT seconds
+# of inactivity to reclaim RAM (~2 GB for all three models combined).
+# ---------------------------------------------------------------------------
+import threading as _threading
+import time as _time
+
+MODEL_IDLE_TIMEOUT = 1800  # seconds (30 minutes) — longer than any realistic
+# single transcription on CPU, so we don't evict mid-job.
+_model_last_used: float = 0.0
+_eviction_timer: _threading.Timer | None = None
+_eviction_lock = _threading.Lock()
+
+
+def _touch_model_timer():
+    """Reset the inactivity timer. Called whenever a model is used."""
+    global _model_last_used, _eviction_timer
+    with _eviction_lock:
+        _model_last_used = _time.monotonic()
+        if _eviction_timer is not None:
+            _eviction_timer.cancel()
+        _eviction_timer = _threading.Timer(MODEL_IDLE_TIMEOUT, _evict_models)
+        _eviction_timer.daemon = True
+        _eviction_timer.start()
+
+
+def _evict_models():
+    """Free all cached ML models to reclaim RAM."""
+    global _FW_MODEL_CACHE, _ECAPA_MODEL, _DIAR_PIPELINE, _eviction_timer
+    import logging
+    _log = logging.getLogger("transcribbler")
+    with _eviction_lock:
+        _eviction_timer = None
+    # Only evict if still idle (no new _touch since the timer was set)
+    if _time.monotonic() - _model_last_used < MODEL_IDLE_TIMEOUT - 1:
+        return
+    freed = []
+    if _FW_MODEL_CACHE:
+        _FW_MODEL_CACHE.clear()
+        freed.append("Whisper")
+    if _DIAR_PIPELINE is not None:
+        _DIAR_PIPELINE = None
+        freed.append("pyannote")
+    if _ECAPA_MODEL is not None:
+        _ECAPA_MODEL = None
+        freed.append("ECAPA")
+    if freed:
+        _log.info("Model eviction: freed %s after %ds idle",
+                  ", ".join(freed), MODEL_IDLE_TIMEOUT)
 
 # ---------------------------------------------------------------------------
 # Voice profile storage (global per-coder, in home dir)
@@ -154,6 +205,7 @@ def _load_faster_whisper_model(language_choice: str, model_size: str = "medium")
 
     cache_key = language_choice if language_choice in ("sv", "autodetect") else model_size
     if cache_key in _FW_MODEL_CACHE:
+        _touch_model_timer()
         return _FW_MODEL_CACHE[cache_key]
 
     try:
@@ -161,16 +213,21 @@ def _load_faster_whisper_model(language_choice: str, model_size: str = "medium")
     except ImportError:
         raise ImportError("faster-whisper is not installed. Run: pip install faster-whisper")
 
+    _load_start = _time.monotonic()
     if language_choice in ("sv", "autodetect"):
         ct2_path = Path.home() / ".cache" / "transcribbler" / "kb-whisper-ct2"
-        if not (ct2_path / "model.bin").exists():
+        needs_convert = not (ct2_path / "model.bin").exists()
+        if needs_convert:
+            _log.info("KB-Whisper: first run — downloading and converting model "
+                      "to CTranslate2 INT8 (this may take several minutes)…")
             _convert_kb_whisper_to_ct2(ct2_path)
         # faster-whisper reads num_mel_bins from config.json to init the feature
         # extractor. The CT2 converter doesn't always copy this field, causing it
         # to default to 80 instead of 128 (whisper-large uses 128 mel bins).
         _patch_ct2_config_mel_bins(ct2_path, n_mels=128)
         model = WhisperModel(str(ct2_path), device="cpu", compute_type="int8")
-        _log.info("KB-Whisper (faster-whisper/CTranslate2 INT8) loaded on CPU")
+        _log.info("KB-Whisper (faster-whisper/CTranslate2 INT8) loaded on CPU in %.1fs",
+                  _time.monotonic() - _load_start)
     else:
         try:
             import torch
@@ -178,11 +235,14 @@ def _load_faster_whisper_model(language_choice: str, model_size: str = "medium")
         except Exception:
             device = "cpu"
         compute_type = "int8_float16" if device == "cuda" else "int8"
+        _log.info("Whisper-%s: loading (first run downloads ~1-2 GB)…", model_size)
         model = WhisperModel(model_size, device=device, compute_type=compute_type)
-        _log.info("Whisper-%s (faster-whisper/CTranslate2 %s) loaded on %s",
-                  model_size, compute_type, device)
+        _log.info("Whisper-%s (faster-whisper/CTranslate2 %s) loaded on %s in %.1fs",
+                  model_size, compute_type, device,
+                  _time.monotonic() - _load_start)
 
     _FW_MODEL_CACHE[cache_key] = model
+    _touch_model_timer()
     return model
 
 
@@ -190,15 +250,120 @@ def _load_faster_whisper_model(language_choice: str, model_size: str = "medium")
 # Plain transcription (no diarization)
 # ---------------------------------------------------------------------------
 
+def transcribe_with_gaps(audio_path: str, language: str = "sv",
+                         model_size: str = "medium",
+                         language_choice: str = "sv",
+                         progress_cb=None) -> dict:
+    """
+    Transcribe without diarization but still insert [ohörbart]/[inaudible] markers
+    for gaps >= 3s. Returns {"text": str, "segments": [...], "speakers_found": []}.
+    Segments have speaker="—" for inaudible stretches, speaker="" for speech.
+    """
+    model = _load_faster_whisper_model(language_choice, model_size)
+    if language_choice == "sv":
+        lang = "sv"
+    elif language_choice == "en":
+        lang = language
+    else:
+        lang = None
+    fw_segments, info = model.transcribe(
+        audio_path, language=lang, task="transcribe", vad_filter=True,
+    )
+    duration = getattr(info, "duration", 0) or 0
+    raw: list = []
+    for seg in fw_segments:
+        raw.append({
+            "speaker": "",
+            "start":   round(float(seg.start), 3),
+            "end":     round(float(seg.end), 3),
+            "text":    seg.text.strip(),
+        })
+        _touch_model_timer()
+        if progress_cb and duration > 0:
+            frac = 0.10 + 0.88 * min(1.0, seg.end / duration)
+            progress_cb("transcribing", frac)
+
+    try:
+        import torchaudio
+        ainfo = torchaudio.info(audio_path)
+        audio_duration = float(ainfo.num_frames) / float(ainfo.sample_rate)
+    except Exception:
+        audio_duration = max((s["end"] for s in raw), default=0.0) or duration
+
+    # Determine silence regions via silero VAD directly — faster-whisper's
+    # vad_filter=True pads/merges segment boundaries so seg.start/seg.end leave
+    # no detectable gaps. Running VAD separately gives true speech chunks.
+    inaudible_label = "inaudible" if language_choice in ("en", "other") else "ohörbart"
+    GAP_THRESHOLD = 1.0  # lower than diarized path (3s) — non-diar users use it to mark any real silence
+    speech_chunks: list = []
+    try:
+        from faster_whisper.vad import get_speech_timestamps
+        from faster_whisper.audio import decode_audio
+        audio_np = decode_audio(audio_path, sampling_rate=16000)
+        chunks = get_speech_timestamps(audio_np, sampling_rate=16000)
+        for c in chunks:
+            speech_chunks.append((c["start"] / 16000.0, c["end"] / 16000.0))
+    except Exception:
+        # Fall back to Whisper's own segment timings
+        speech_chunks = [(s["start"], s["end"]) for s in raw]
+
+    inaudible_ranges: list = []
+    prev_end = 0.0
+    for (s, e) in speech_chunks:
+        if s - prev_end >= GAP_THRESHOLD:
+            inaudible_ranges.append((prev_end, s))
+        prev_end = max(prev_end, e)
+    if audio_duration - prev_end >= GAP_THRESHOLD:
+        inaudible_ranges.append((prev_end, audio_duration))
+
+    # Merge inaudible ranges into the transcript segment list by start time
+    filled: list = []
+    raw_sorted = sorted(raw, key=lambda s: s["start"])
+    i = 0
+    for (gs, ge) in inaudible_ranges:
+        while i < len(raw_sorted) and raw_sorted[i]["start"] < gs:
+            filled.append(raw_sorted[i]); i += 1
+        filled.append({"speaker": "—", "start": round(gs, 3),
+                       "end": round(ge, 3), "text": ""})
+    while i < len(raw_sorted):
+        filled.append(raw_sorted[i]); i += 1
+
+    # Merge consecutive inaudible runs
+    merged: list = []
+    for seg in filled:
+        if merged and merged[-1]["speaker"] == "—" and seg["speaker"] == "—":
+            merged[-1]["end"] = max(merged[-1]["end"], seg["end"])
+            continue
+        merged.append(dict(seg))
+
+    def _fmt(sec: float) -> str:
+        mm = int(sec // 60); ss = int(sec % 60)
+        hh = int(round((sec - int(sec)) * 100))
+        if hh == 100:
+            hh = 0; ss += 1
+            if ss == 60: ss = 0; mm += 1
+        return f"{mm:02d}:{ss:02d}:{hh:02d}"
+    for seg in merged:
+        if seg["speaker"] == "—":
+            seg["text"] = f"[{inaudible_label} {_fmt(seg['start'])} – {_fmt(seg['end'])}]"
+
+    text = " ".join(seg["text"] for seg in merged if seg["text"]).strip()
+    return {"text": text, "segments": merged, "speakers_found": []}
+
+
 def transcribe(audio_path: str, language: str = "sv",
                model_size: str = "medium",
-               language_choice: str = "sv") -> str:
+               language_choice: str = "sv",
+               progress_cb=None) -> str:
     """
     Transcribe audio and return plain text (no diarization).
     language_choice drives which backend is used:
       "autodetect" / "sv"   → KBLab/kb-whisper-large (faster-whisper/CTranslate2 INT8)
       "en"                  → faster-whisper "medium", language forced to "en"
       "other"               → faster-whisper "medium", task="transcribe", no forced language
+
+    progress_cb(stage, fraction) is called during iteration with stage="transcribing"
+    and fraction between 0.10 and 0.98 based on segment end time vs audio duration.
     """
     model = _load_faster_whisper_model(language_choice, model_size)
     # Determine forced language (None = auto-detect for "autodetect" and "other")
@@ -208,14 +373,22 @@ def transcribe(audio_path: str, language: str = "sv",
         lang = language  # caller-supplied language code, default "en"
     else:
         lang = None
-    fw_segments, _ = model.transcribe(
+    fw_segments, info = model.transcribe(
         audio_path,
         language=lang,
         task="transcribe",
         vad_filter=True,
     )
-    # fw_segments is a generator — iterate once to collect all text
-    return " ".join(seg.text.strip() for seg in fw_segments).strip()
+    duration = getattr(info, "duration", 0) or 0
+    # fw_segments is a generator — iterate once to collect all text + report progress.
+    parts = []
+    for seg in fw_segments:
+        parts.append(seg.text.strip())
+        _touch_model_timer()  # prevent eviction during long transcription
+        if progress_cb and duration > 0:
+            frac = 0.10 + 0.88 * min(1.0, seg.end / duration)
+            progress_cb("transcribing", frac)
+    return " ".join(parts).strip()
 
 
 def transcribe_to_file(audio_path: str, out_path: str,
@@ -239,7 +412,7 @@ def _load_diarization_pipeline(hf_token: str, settings: dict):
     each call (they mutate pipeline state in-place and must be re-applied).
     Raises ImportError if pyannote.audio is not installed.
     """
-    global _DIAR_PIPELINE
+    global _DIAR_PIPELINE, _DIAR_DEVICE
     try:
         from pyannote.audio import Pipeline
     except ImportError:
@@ -260,13 +433,16 @@ def _load_diarization_pipeline(hf_token: str, settings: dict):
             import torch
             if torch.backends.mps.is_available():
                 _DIAR_PIPELINE.to(torch.device("mps"))
+                _DIAR_DEVICE = "mps"
                 import logging
                 logging.getLogger("transcribbler").info("pyannote pipeline moved to MPS")
             elif torch.cuda.is_available():
                 _DIAR_PIPELINE.to(torch.device("cuda"))
+                _DIAR_DEVICE = "cuda"
                 import logging
                 logging.getLogger("transcribbler").info("pyannote pipeline moved to CUDA")
             else:
+                _DIAR_DEVICE = "cpu"
                 import logging
                 logging.getLogger("transcribbler").warning(
                     "pyannote pipeline running on CPU — diarization will be very slow"
@@ -274,6 +450,7 @@ def _load_diarization_pipeline(hf_token: str, settings: dict):
         except Exception as _e:
             # If MPS .to() fails (some pyannote ops are not implemented on MPS),
             # fall back to CPU silently. Log the reason so we can debug later.
+            _DIAR_DEVICE = "cpu"
             import logging
             logging.getLogger("transcribbler").warning(
                 "pyannote .to(device) failed, falling back to CPU: %s", _e
@@ -307,6 +484,7 @@ def _load_diarization_pipeline(hf_token: str, settings: dict):
             else:
                 raise
 
+    _touch_model_timer()
     return _DIAR_PIPELINE
 
 
@@ -319,6 +497,7 @@ def _load_ecapa_model():
     Tries MPS (Apple Silicon) first, then CUDA, then CPU."""
     global _ECAPA_MODEL
     if _ECAPA_MODEL is not None:
+        _touch_model_timer()
         return _ECAPA_MODEL
     try:
         from speechbrain.inference.speaker import EncoderClassifier
@@ -359,6 +538,7 @@ def _load_ecapa_model():
             )
         else:
             raise
+    _touch_model_timer()
     return _ECAPA_MODEL
 
 
@@ -506,6 +686,11 @@ def match_voice_profile(
             action = "none"
         results[spk] = {"similarity": round(sim, 3), "action": action}
     return results
+
+
+def get_diarization_device() -> str:
+    """Return the device the diarization pipeline is running on ('cpu', 'mps', 'cuda')."""
+    return _DIAR_DEVICE
 
 
 def diarize(audio_path: str, hf_token: str, settings: dict) -> list:

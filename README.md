@@ -25,6 +25,17 @@ A local desktop app for qualitative transcript coding. Import transcripts (text,
 - [ffmpeg](https://ffmpeg.org/) (required for Whisper): `brew install ffmpeg`
 - HF token for diarization (optional): [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
 
+### Recommended system specifications
+
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| **RAM** | 4 GB | 8 GB+ |
+| **Disk** | 3 GB free (models + app) | 5 GB+ free |
+| **GPU** | Not required | Apple Silicon (MPS) or NVIDIA (CUDA) for fast diarization |
+| **OS** | macOS 12+, Windows 10+, Ubuntu 20.04+ | Latest stable |
+
+Without a GPU, speaker diarization runs on CPU and is significantly slower (20-30x). Transcription (Whisper) runs well on CPU.
+
 ## Installation
 
 ```bash
@@ -54,6 +65,21 @@ npm start
 ```
 
 Requires [Node.js](https://nodejs.org/) ≥ 20.
+
+### Building installers (DMG / NSIS / AppImage)
+
+The bundled Python runtime lives in `electron/python-runtime/` and is copied as-is into the installer. Before building, ML-deps (Whisper, pyannote, torch, docTR/Vision) must be installed into that runtime so end users don't need to `pip install` anything:
+
+```bash
+cd electron
+npm install
+npm run prepare:runtime     # installs requirements-ml.txt into python-runtime/ (~1 GB)
+npm run build:mac           # or build:win / build:linux
+```
+
+`prepare:runtime` runs automatically as a `prebuild:*` hook, so `npm run build:mac` alone also works. Re-run with `FORCE=1 npm run prepare:runtime` to reinstall.
+
+The `electron/python-runtime/` directory itself is **not checked into git** — each platform needs a matching [python-build-standalone](https://github.com/astral-sh/python-build-standalone) unpacked there before building.
 
 ## Project structure
 

@@ -1,8 +1,8 @@
 """
 ocr.py — Platform-adaptive OCR dispatcher.
 
-macOS   → Apple Vision (pyobjc-framework-Vision) — inbyggt, gratis, stöder handskrift
-Win/Lin → TrOCR (microsoft/trocr-large-handwritten, via transformers) — gratis, ML-baserad
+macOS   → Apple Vision (pyobjc-framework-Vision) — inbyggt, gratis, sv-SE + en-US
+Win/Lin → EasyOCR (easyocr, svenska+engelska) — gratis, hanterar åäö
 
 Interface:
   is_image(path)               → bool
@@ -22,7 +22,7 @@ def is_image(path: str) -> bool:
 def ocr_image(image_path: str, progress_cb=None) -> dict:
     """
     Run OCR on an image file and return {"text": str, "boxes": [...]}.
-    Uses Apple Vision on macOS, docTR on Windows/Linux.
+    Uses Apple Vision on macOS, EasyOCR on Windows/Linux.
     progress_cb(stage: str, fraction: float) — optional progress callback.
     """
     system = platform.system()
@@ -30,5 +30,5 @@ def ocr_image(image_path: str, progress_cb=None) -> dict:
         from core.ocr_vision import ocr_image_vision
         return ocr_image_vision(image_path, progress_cb=progress_cb)
     else:
-        from core.ocr_doctr import ocr_image_doctr
-        return ocr_image_doctr(image_path, progress_cb=progress_cb)
+        from core.ocr_easyocr import ocr_image_easyocr
+        return ocr_image_easyocr(image_path, progress_cb=progress_cb)

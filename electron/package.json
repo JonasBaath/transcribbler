@@ -14,6 +14,11 @@
   "scripts": {
     "postinstall": "node postinstall.js",
     "start": "electron .",
+    "prepare:runtime": "bash prepare-runtime.sh",
+    "prebuild:mac": "bash prepare-runtime.sh",
+    "prebuild:win": "bash prepare-runtime.sh",
+    "prebuild:linux": "bash prepare-runtime.sh",
+    "prebuild": "bash prepare-runtime.sh",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
     "build:linux": "electron-builder --linux",
@@ -27,12 +32,19 @@
     "appId": "se.jonasbaaath.transcribbler",
     "productName": "Transcribbler",
     "directories": { "buildResources": "assets", "output": "dist" },
-    "files": ["main.js", "preload.js"],
-    "extraResources": [{
-      "from": "../",
-      "to": "app",
-      "filter": ["main.py", "requirements.txt", "core/**/*", "static/**/*", "templates/**/*"]
-    }],
+    "files": ["main.js", "preload.js", "assets/**/*"],
+    "extraResources": [
+      {
+        "from": "../",
+        "to": "app",
+        "filter": ["main.py", "requirements.txt", "core/**/*", "static/**/*", "templates/**/*"]
+      },
+      {
+        "from": "python-runtime",
+        "to": "python-runtime",
+        "filter": ["**/*"]
+      }
+    ],
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "assets/icon.icns",

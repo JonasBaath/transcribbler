@@ -144,16 +144,14 @@ body.electron-mac #splash * {
 body.electron-mac #tools-dropdown {
   display: none;
 }
-body.electron-mac #coder-badge {
-  left: calc(var(--left-w, 220px) - 14px + 64px);
-}
 #topbar-logo { width: 27px; height: 14px; flex-shrink: 0; }
 #topbar-logo rect  { fill: var(--accent); }
 #project-title {
-  font-weight: 700; font-size: 15px; color: var(--accent); flex: 1;
+  font-weight: 700; font-size: 15px; color: var(--accent);
   cursor: text; border-radius: 4px; padding: 1px 4px; margin: 0 -4px;
   outline: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  max-width: 260px;
+  min-width: 0; max-width: 40vw;
+  flex-shrink: 1;
 }
 #project-title[contenteditable="true"] {
   background: var(--bg2); box-shadow: 0 0 0 2px var(--accent);
@@ -162,10 +160,7 @@ body.electron-mac #coder-badge {
 #coder-badge {
   font-size: 12px; color: var(--text-dim); background: var(--bg3);
   border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px;
-  position: absolute;
-  left: calc(var(--left-w, 220px) - 14px);
-  transform: translate(-100%, -50%);
-  top: 50%;
+  flex-shrink: 0; white-space: nowrap;
 }
 .topbar-actions { display: flex; align-items: center; gap: 8px; flex: 1; }
 .topbar-spacer { flex: 1; }
@@ -295,6 +290,47 @@ body.electron-mac #coder-badge {
 #ocr-box-overlay.hidden { display: none; }
 #ocr-box-overlay rect { fill: rgba(255,220,0,0.18); stroke: var(--accent); stroke-width: 0.004; }
 #btn-ocr-boxes.active { color: var(--accent); }
+#source-img { cursor: default; }
+#source-img.pin-mode { cursor: crosshair; }
+#btn-pin-mode.active { background: var(--accent); color: #fff; }
+#point-overlay { position: absolute; inset: 0; pointer-events: none; }
+.point-pin {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  display: flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  color: #fff;
+  font-size: 11px; font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.point-pin:hover { transform: translate(-50%, -50%) scale(1.15); z-index: 10; }
+.point-pin.dragging { cursor: grabbing; opacity: 0.85; }
+.source-img-hint {
+  position: absolute;
+  left: 50%; bottom: 8px;
+  transform: translateX(-50%);
+  padding: 4px 10px;
+  font-size: 0.78em;
+  color: #fff;
+  background: rgba(0,0,0,0.55);
+  border-radius: 12px;
+  pointer-events: none;
+  white-space: nowrap;
+  max-width: 90%;
+  overflow: hidden; text-overflow: ellipsis;
+  opacity: 0;
+  transition: opacity 0.25s;
+  z-index: 5;
+}
+.source-img-hint { opacity: 0.95; }
+.source-img-hint.hidden { display: none; }
 #editor-placeholder { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-dim); }
 #editor-meta { display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
 #editor-title { font-size: 18px; font-weight: 700; }
@@ -690,6 +726,18 @@ body.electron-mac #coder-badge {
   background: var(--bg3); border: 1px solid var(--border);
 }
 .settings-btn:hover { background: var(--bg); }
+
+/* ---- System info box in settings ---- */
+.system-info-box {
+  font-size: 0.82em;
+  line-height: 1.5;
+  color: var(--text2);
+  padding: 6px 8px;
+}
+.system-info-box .sys-warn {
+  color: var(--warning, #e0a020);
+  font-weight: 500;
+}
 
 /* ---- Voice profile ---- */
 .voice-status-box {
