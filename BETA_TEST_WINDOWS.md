@@ -61,7 +61,7 @@ ML-beroenden behövs för Whisper och OCR. Hoppa över detta steg om disken är 
 pip install -r requirements-ml.txt
 ```
 
-**OBS:** `python-doctr[torch]` installeras automatiskt på Windows (inte macOS). Rapportera om CUDA-varningar dyker upp.
+**OBS:** `easyocr` (med torch-backend) installeras via `requirements-ml.txt`. Rapportera eventuella CUDA-varningar.
 
 ---
 
@@ -232,15 +232,15 @@ Get-Process python, electron -ErrorAction SilentlyContinue
 
 *Hela Del 4 kräver att ML-beroenden installerats (steg 1.3).*
 
-### 4.1 OCR via docTR
+### 4.1 OCR via EasyOCR
 
 Testbild finns i repo: `tests\fixtures\test_image.jpeg` (tidningsomslag med synlig text: "TC", "MIGRÄ[N]", "Nya rön om...", "ROCKENS FOLKPARTISTER", "ris 9:95").
 
 Importera via UI med kryssrutan "Transkribera text i bild" / "Image OCR" ikryssad.
 
-**Förväntat:** docTR kör OCR, text extraheras. Några ord bör kännas igen — särskilt de stora röda rubrikerna "ROCKENS FOLKPARTISTER". Mindre text och stiliserad logotyp ("TC") kan misslyckas — det är acceptabelt.
+**Förväntat:** EasyOCR kör, text extraheras. Några ord bör kännas igen — särskilt de stora röda rubrikerna "ROCKENS FOLKPARTISTER". Mindre text och stiliserad logotyp ("TC") kan misslyckas — det är acceptabelt.
 
-**Rapportera:** modell-nedladdningstid (första gången), CUDA/CPU-varningar, körtid, vilka ord som extraherades korrekt.
+**Rapportera:** modell-nedladdningstid (första gången), CUDA/CPU-varningar, körtid, vilka ord som extraherades korrekt, särskilt om åäö hanteras rätt.
 
 ### 4.2 Whisper-transkription (ljud)
 
@@ -307,7 +307,7 @@ Fyll i efter avslutat test:
 | 3.1 Electron start | OK/FAIL | |
 | 3.2 IPC mappväljare | OK/FAIL | |
 | 3.3 Stäng Electron | OK/FAIL | |
-| 4.1 OCR docTR | OK/FAIL | |
+| 4.1 OCR EasyOCR | OK/FAIL | |
 | 4.2 Whisper | OK/FAIL/SKIP | |
 | 4.3 Diarization | OK/FAIL/SKIP | |
 | 5. Pytest | OK/FAIL | |
