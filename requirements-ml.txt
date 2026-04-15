@@ -7,8 +7,16 @@ pyannote.audio>=3.1.0,<4.0
 # pyannote 3.x anropar hf_hub_download(use_auth_token=...) internt;
 # huggingface_hub 1.0 tog bort det kwarg:et. Pinna tills pyannote uppdaterar.
 huggingface_hub<1.0
-torch>=2.0,<2.6
-torchaudio>=2.0,<2.6
+
+# Torch-pinning per plattform.
+# På Linux defaultar PyPI-wheelen till CUDA-varianten (~3 GB nvidia/* + triton).
+# För bundlade beta-byggen vill vi CPU-only — användare med NVIDIA-GPU kan
+# manuellt installera CUDA-wheelen efteråt (se README → "GPU acceleration on Linux").
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1+cpu ; sys_platform == "linux"
+torchaudio==2.5.1+cpu ; sys_platform == "linux"
+torch>=2.0,<2.6 ; sys_platform != "linux"
+torchaudio>=2.0,<2.6 ; sys_platform != "linux"
 soundfile>=0.12.0
 Pillow>=10.0.0
 rapidfuzz>=3.6.0

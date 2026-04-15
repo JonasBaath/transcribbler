@@ -14,7 +14,7 @@ A local desktop app for qualitative transcript coding. Import transcripts (text,
 - **Diarization** — speaker separation via pyannote.audio + ECAPA-TDNN
 - **Coding** — highlight text passages and link them to hierarchical codes; undo/redo support
 - **Multiple coders** — inter-rater reliability support (Cohen's Kappa)
-- **OCR** — import images and extract text (Apple Vision on macOS, docTR on Windows/Linux)
+- **OCR** — import images and extract text (Apple Vision on macOS, EasyOCR on Windows/Linux)
 - **Export** — CSV, Markdown, DOCX, ODT, QDPX (ATLAS.ti/NVivo-compatible)
 - **Import** — .txt, .docx, .odt, .md (incl. YAML frontmatter from Notescribbler), .nsenc, .scribbler
 - **Offline-first** — no API keys required, all data stays local
@@ -68,7 +68,7 @@ Requires [Node.js](https://nodejs.org/) ≥ 20.
 
 ### Building installers (DMG / NSIS / AppImage)
 
-The bundled Python runtime lives in `electron/python-runtime/` and is copied as-is into the installer. Before building, ML-deps (Whisper, pyannote, torch, docTR/Vision) must be installed into that runtime so end users don't need to `pip install` anything:
+The bundled Python runtime lives in `electron/python-runtime/` and is copied as-is into the installer. Before building, ML-deps (Whisper, pyannote, torch, EasyOCR/Vision) must be installed into that runtime so end users don't need to `pip install` anything:
 
 ```bash
 cd electron
@@ -80,6 +80,33 @@ npm run build:mac           # or build:win / build:linux
 `prepare:runtime` runs automatically as a `prebuild:*` hook, so `npm run build:mac` alone also works. Re-run with `FORCE=1 npm run prepare:runtime` to reinstall.
 
 The `electron/python-runtime/` directory itself is **not checked into git** — each platform needs a matching [python-build-standalone](https://github.com/astral-sh/python-build-standalone) unpacked there before building.
+
+## GPU acceleration on Linux (optional)
+
+The Linux AppImage ships with **CPU-only PyTorch** to keep the download to ~600 MB. For most users (interview audio in the 10-minute range) CPU transcription is fast enough — KB-Whisper-medium runs at ~2× realtime on a modern laptop.
+
+If you have an **NVIDIA GPU** with a working CUDA-capable driver installed on your host system, you can swap in the CUDA build of PyTorch to accelerate Whisper transcription by 5–10×:
+
+```bash
+# From inside the AppImage's bundled python (one-time):
+./Transcribbler-0.1.0.AppImage --appimage-extract
+cd squashfs-root/resources/python-runtime
+./bin/python -m pip install --upgrade \
+    torch torchaudio \
+    --index-url https://download.pytorch.org/whl/cu121
+# Re-pack or just run from squashfs-root/AppRun
+```
+
+Or, if running from a dev clone instead of the AppImage:
+
+```bash
+source venv/bin/activate
+pip install --upgrade torch torchaudio --index-url https://download.pytorch.org/whl/cu121
+```
+
+CUDA 12.1 is recommended; adjust the index URL (`cu118`, `cu124`, etc.) to match your driver. Verify with `python -c "import torch; print(torch.cuda.is_available())"` — should print `True`.
+
+**Note:** the bundled CPU build will not use AMD ROCm or Intel GPUs. macOS uses Apple's MPS backend automatically when available; Windows currently bundles the standard PyPI wheel (CPU + CUDA when present on system).
 
 ## Project structure
 
