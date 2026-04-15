@@ -135,6 +135,8 @@
           </label>
           <div class="settings-divider"></div>
           <button class="btn-sm settings-btn" id="btn-voice-profile" data-i18n="btn.voice.profile">🎤 Röstprofil</button>
+          <div class="settings-divider"></div>
+          <div id="system-info-box" class="system-info-box hidden"></div>
         </div>
       </div>
       <button class="btn-sm" id="btn-export-menu"
@@ -207,6 +209,9 @@
                 <button id="waveform-zoom-out" title="Zooma ut">−</button>
                 <button id="waveform-zoom-in"  title="Zooma in">+</button>
               </div>
+              <label id="wf-space-toggle" title="Mellanslag spelar/pausar">
+                <input type="checkbox" id="wf-space-enabled" checked> Spacebar play/pause
+              </label>
             </div>
             <span id="audio-model-badge"></span>
           </div>
@@ -252,12 +257,15 @@
           <span id="source-panel-title">Källbild</span>
           <button class="btn-sm btn-ghost" id="btn-ocr-photos" title="Extrahera text från foton (OCR)" style="display:none">⊙</button>
           <button class="btn-sm btn-ghost" id="btn-ocr-boxes" title="Visa igenkänd text">⊞</button>
+          <button class="btn-sm btn-ghost" id="btn-pin-mode" title="Placera kodpins" data-i18n-title="btn.pin.mode">📍</button>
           <button class="btn-sm btn-ghost" id="btn-close-source">✕</button>
         </div>
         <div class="source-img-scroll">
           <div id="source-img-wrap">
             <img id="source-img" src="" alt="källbild" />
             <svg id="ocr-box-overlay" class="hidden" viewBox="0 0 1 1" preserveAspectRatio="none"></svg>
+            <div id="point-overlay"></div>
+            <div id="source-img-hint" class="source-img-hint" data-i18n="hint.image.pin">Klicka var som helst i bilden för att placera en kodpin. Dra en pin för att flytta den.</div>
           </div>
           <div id="note-photos-container" class="hidden"></div>
         </div>
@@ -899,8 +907,19 @@
   </div>
 </div>
 
+<div id="modal-confirm" class="overlay hidden">
+  <div class="dialog">
+    <h2 id="confirm-modal-title">Bekräfta</h2>
+    <p id="confirm-modal-message" style="white-space:pre-wrap;"></p>
+    <div class="dialog-actions">
+      <button class="btn-primary" id="btn-confirm-ok">OK</button>
+      <button class="btn-ghost" id="btn-confirm-cancel">Avbryt</button>
+    </div>
+  </div>
+</div>
+
 <script src="/static/js/translations.js?v=18"></script>
 <script src="/static/js/wavesurfer.min.js"></script>
-<script src="/static/js/app.js?v=56"></script>
+<script src="/static/js/app.js?v=58"></script>
 </body>
 </html>

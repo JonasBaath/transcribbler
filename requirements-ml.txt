@@ -3,11 +3,17 @@
 -r requirements.txt
 
 faster-whisper>=1.0.3
-pyannote.audio>=3.1.0
+pyannote.audio>=3.1.0,<4.0
+# pyannote 3.x anropar hf_hub_download(use_auth_token=...) internt;
+# huggingface_hub 1.0 tog bort det kwarg:et. Pinna tills pyannote uppdaterar.
+huggingface_hub<1.0
+torch>=2.0,<2.6
+torchaudio>=2.0,<2.6
 soundfile>=0.12.0
 Pillow>=10.0.0
 rapidfuzz>=3.6.0
 
-# OCR: docTR (Win/Linux), Apple Vision (macOS — installeras via pyobjc)
-python-doctr[torch]>=0.8.0 ; sys_platform != "darwin"
+# OCR: EasyOCR (Win/Linux, stöder svenska inkl. åäö),
+#      Apple Vision (macOS — installeras via pyobjc)
+easyocr>=1.7 ; sys_platform != "darwin"
 pyobjc-framework-Vision>=9.0 ; sys_platform == "darwin"

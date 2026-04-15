@@ -22,6 +22,20 @@ function findFreePort() {
   });
 }
 
+// Try a stable port first so localStorage (origin-bound) survives between runs.
+// Falls back to a random free port if the preferred port is occupied.
+const PREFERRED_PORT = 53917;
+function tryPort(port) {
+  return new Promise(resolve => {
+    const srv = net.createServer();
+    srv.once('error', () => resolve(false));
+    srv.listen(port, '127.0.0.1', () => srv.close(() => resolve(true)));
+  });
+}
+async function pickPort() {
+  return (await tryPort(PREFERRED_PORT)) ? PREFERRED_PORT : await findFreePort();
+}
+
 function getAppDir() {
   return app.isPackaged
     ? path.join(process.resourcesPath, 'app')
@@ -29,9 +43,18 @@ function getAppDir() {
 }
 
 function findPython(appDir) {
-  const candidates = process.platform === 'win32'
-    ? [path.join(appDir, 'venv', 'Scripts', 'python.exe'), 'python']
-    : [path.join(appDir, 'venv', 'bin', 'python3'), 'python3', 'python'];
+  const bundled = app.isPackaged
+    ? (process.platform === 'win32'
+        ? path.join(process.resourcesPath, 'python-runtime', 'python.exe')
+        : path.join(process.resourcesPath, 'python-runtime', 'bin', 'python3'))
+    : null;
+
+  const candidates = [
+    ...(bundled ? [bundled] : []),
+    ...(process.platform === 'win32'
+      ? [path.join(appDir, 'venv', 'Scripts', 'python.exe'), 'python']
+      : [path.join(appDir, 'venv', 'bin', 'python3'), 'python3', 'python']),
+  ];
 
   for (const c of candidates) {
     if (!c.includes(path.sep) || fs.existsSync(c)) return c;
@@ -253,9 +276,12 @@ function killFlask() {
 
 app.whenReady().then(async () => {
   if (process.platform === 'darwin') {
-    app.dock.setIcon(path.join(__dirname, 'assets', 'icon.png'));
+    const iconPath = path.join(__dirname, 'assets', 'icon.png');
+    if (fs.existsSync(iconPath)) {
+      try { app.dock.setIcon(iconPath); } catch (e) { console.warn('dock.setIcon failed:', e.message); }
+    }
   }
-  flaskPort = await findFreePort();
+  flaskPort = await pickPort();
   startFlask(flaskPort);
 
   try {

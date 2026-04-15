@@ -1,0 +1,116 @@
+{
+  "name": "QISR - induktiv analys",
+  "coder": "Jonas",
+  "created": "2026-04-15T11:31:41",
+  "modified": "2026-04-15T15:22:20",
+  "codes": [
+    {
+      "id": "620f44a9",
+      "name": "Nature",
+      "parent": null,
+      "color": "#009E73",
+      "description": "ideas about nature",
+      "created": "2026-04-15T11:45:45"
+    },
+    {
+      "id": "a8a3e660",
+      "name": "Organization",
+      "parent": null,
+      "color": "#882255",
+      "description": "Organizational forms and work",
+      "created": "2026-04-15T11:47:09"
+    },
+    {
+      "id": "565f2d77",
+      "name": "Outcome",
+      "parent": "a8a3e660",
+      "color": "#e8a1c4",
+      "description": "What the organization/organizing has achieved",
+      "created": "2026-04-15T11:50:01"
+    },
+    {
+      "id": "5798f91c",
+      "name": "Ambition",
+      "parent": "a8a3e660",
+      "color": "#cd3782",
+      "description": "Organizational ambition for outcome",
+      "created": "2026-04-15T12:34:38"
+    }
+  ],
+  "transcripts": [
+    {
+      "id": "4128cf42",
+      "name": "Interview with Malmö Food Council - SLU-0001-ENG",
+      "original": "4128cf42.docx",
+      "text_file": "4128cf42.txt",
+      "tags": [],
+      "added": "2026-04-15T11:31:53"
+    },
+    {
+      "id": "085ff277",
+      "name": "textdatatext_lotta",
+      "original": "085ff277.docx",
+      "text_file": "085ff277.txt",
+      "tags": [],
+      "added": "2026-04-15T11:31:53"
+    },
+    {
+      "id": "e7063787",
+      "name": "Simon & Garfunkle",
+      "source": "image",
+      "source_file": "e7063787_source.jpeg",
+      "text_file": "e7063787.txt",
+      "tags": [],
+      "added": "2026-04-15T13:11:17"
+    },
+    {
+      "id": "94a8250f",
+      "name": "large-detailed-map-of-malmo",
+      "source": "image",
+      "source_file": "94a8250f_source.jpg",
+      "text_file": "94a8250f.txt",
+      "tags": [],
+      "added": "2026-04-15T14:07:21"
+    },
+    {
+      "id": "c599dfd0",
+      "name": "STE-001-cut1-30s005-D",
+      "source": "audio",
+      "original": "c599dfd0.wav",
+      "text_file": "c599dfd0.txt",
+      "audio_file": "c599dfd0.wav",
+      "whisper_model": "medium",
+      "language": "sv",
+      "diarization": true,
+      "diarization_settings": {
+        "segmentation_threshold": 0.5,
+        "clustering_threshold": 0.7
+      },
+      "speakers": {},
+      "tags": [],
+      "added": "2026-04-15T15:20:35"
+    },
+    {
+      "id": "71cbe264",
+      "name": "STE-001-cut1-30s005",
+      "source": "audio",
+      "original": "71cbe264.wav",
+      "text_file": "71cbe264.txt",
+      "audio_file": "71cbe264.wav",
+      "whisper_model": "medium",
+      "language": "sv",
+      "diarization": false,
+      "diarization_settings": {
+        "segmentation_threshold": 0.5,
+        "clustering_threshold": 0.7
+      },
+      "speakers": {},
+      "tags": [],
+      "added": "2026-04-15T15:22:20"
+    }
+  ],
+  "speakers": [],
+  "numbering": false,
+  "trans_order": false,
+  "use_waveform": true
+}

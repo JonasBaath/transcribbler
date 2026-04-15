@@ -4,6 +4,76 @@
 
 "use strict";
 
+// In-app dialogs — used instead of window.confirm/alert/prompt so Electron's
+// native Chromium dialog (with Electron icon) doesn't appear.
+function _appDialog({ message, title, mode, defaultValue = "" }) {
+  // mode: "confirm" | "alert" | "prompt"
+  return new Promise(resolve => {
+    const modal  = document.getElementById("modal-confirm");
+    const msgEl  = document.getElementById("confirm-modal-message");
+    const titleEl = document.getElementById("confirm-modal-title");
+    const okBtn  = document.getElementById("btn-confirm-ok");
+    const canBtn = document.getElementById("btn-confirm-cancel");
+    if (!modal || !msgEl || !okBtn || !canBtn) {
+      if (mode === "alert")   { window.alert(message); resolve(undefined); return; }
+      if (mode === "prompt")  { resolve(window.prompt(message, defaultValue)); return; }
+      resolve(window.confirm(message)); return;
+    }
+    msgEl.textContent = message;
+    titleEl.textContent = title || (mode === "alert" ? "Meddelande" : "Bekräfta");
+
+    // Inject/remove an input for prompt mode
+    let input = modal.querySelector("#confirm-modal-input");
+    if (mode === "prompt") {
+      if (!input) {
+        input = document.createElement("input");
+        input.type = "text";
+        input.id = "confirm-modal-input";
+        input.style.cssText = "width:100%;margin-top:8px;";
+        msgEl.insertAdjacentElement("afterend", input);
+      }
+      input.value = defaultValue;
+    } else if (input) {
+      input.remove(); input = null;
+    }
+
+    // Hide Cancel button for alert mode
+    canBtn.style.display = (mode === "alert") ? "none" : "";
+
+    modal.classList.remove("hidden");
+    const cleanup = (v) => {
+      modal.classList.add("hidden");
+      canBtn.style.display = "";
+      okBtn.removeEventListener("click", onOk);
+      canBtn.removeEventListener("click", onCancel);
+      document.removeEventListener("keydown", onKey);
+      modal.removeEventListener("click", onBackdrop);
+      resolve(v);
+    };
+    const onOk = () => {
+      if (mode === "prompt") cleanup(input ? input.value : defaultValue);
+      else if (mode === "alert") cleanup(undefined);
+      else cleanup(true);
+    };
+    const onCancel = () => cleanup(mode === "prompt" ? null : false);
+    const onKey = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); onCancel(); }
+      else if (e.key === "Enter" && !(mode === "prompt" && e.target !== input)) {
+        e.preventDefault(); onOk();
+      }
+    };
+    const onBackdrop = (e) => { if (e.target === modal) onCancel(); };
+    okBtn.addEventListener("click", onOk);
+    canBtn.addEventListener("click", onCancel);
+    document.addEventListener("keydown", onKey);
+    modal.addEventListener("click", onBackdrop);
+    setTimeout(() => (input || okBtn).focus(), 0);
+  });
+}
+function appConfirm(message, opts = {}) { return _appDialog({ message, title: opts.title, mode: "confirm" }); }
+function appAlert(message, opts = {})   { return _appDialog({ message, title: opts.title, mode: "alert" }); }
+function appPrompt(message, defaultValue = "", opts = {}) { return _appDialog({ message, title: opts.title, mode: "prompt", defaultValue }); }
+
 // ---------------------------------------------------------------------------
 // Electron native menu integration
 // ---------------------------------------------------------------------------
@@ -39,6 +109,7 @@ let annotations = [];
 
 // Pending annotation selection
 let pendingSelection = null;  // {start, end, text}
+let pendingPoint = null;      // {x, y} (normalised 0-1) for image-pin annotations
 let pendingAnnId = null;      // for edit/detail popup
 
 // Feature state — declared here so all functions can reference them
@@ -92,6 +163,7 @@ let useWaveformEnabled = false;
 let _wavesurfer        = null;   // WaveSurfer instance for current audio transcript
 let _wavesurferSeeking = false;  // prevent feedback loop between audio <-> wavesurfer seek
 let _wfZoom            = 1;      // current zoom level for waveform
+let _wfHandlers        = null;   // bound handlers on audio-player/button — removed in _destroyWaveform
 
 // OCR bounding box overlay
 let _ocrBoxesVisible = false;
@@ -184,8 +256,10 @@ document.getElementById("btn-pick-open").addEventListener("click", () => pickFol
 document.getElementById("btn-pick-new").addEventListener("click",  () => pickFolder("new-folder"));
 
 // ---- Open ----
-document.getElementById("open-coder").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") { e.preventDefault(); document.getElementById("btn-open").click(); }
+["open-coder", "open-folder"].forEach(id => {
+  document.getElementById(id).addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); document.getElementById("btn-open").click(); }
+  });
 });
 
 document.getElementById("btn-open").addEventListener("click", async () => {
@@ -201,8 +275,10 @@ document.getElementById("btn-open").addEventListener("click", async () => {
 });
 
 // ---- New ----
-document.getElementById("new-coder").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") { e.preventDefault(); document.getElementById("btn-new").click(); }
+["new-coder", "new-folder", "new-name"].forEach(id => {
+  document.getElementById(id).addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); document.getElementById("btn-new").click(); }
+  });
 });
 
 document.getElementById("btn-new").addEventListener("click", async () => {
@@ -300,7 +376,15 @@ window.addEventListener("DOMContentLoaded", () => {
     document.getElementById("open-coder").value = savedCoder;
     document.getElementById("new-coder").value  = savedCoder;
   }
-  loadRecentProjects();
+  loadRecentProjects().then(() => {
+    const folder = document.getElementById("open-folder").value.trim();
+    const coder  = document.getElementById("open-coder").value.trim();
+    if (folder && coder) {
+      document.getElementById("btn-open").focus();
+    } else {
+      document.getElementById(folder ? "open-coder" : "open-folder").focus();
+    }
+  });
 });
 
 document.getElementById("btn-close-project").addEventListener("click", () => {
@@ -382,7 +466,7 @@ function renderTranscriptList() {
     });
     li.querySelector(".trans-del").addEventListener("click", async e => {
       e.stopPropagation();
-      if (!confirm(t("confirm.del.transcript", { name: tr.name }))) return;
+      if (!await appConfirm(t("confirm.del.transcript", { name: tr.name }))) return;
       const res = await DEL(`/api/transcripts/${tr.id}`);
       if (res.ok) { project = res.project; renderTranscriptList(); if (currentTid === tr.id) clearEditor(); }
     });
@@ -549,24 +633,30 @@ const STAGE_LABELS = {
   "pending":      "Förbereder…",
   "loading_model":"Laddar modell…",
   "diarizing":    "Identifierar talare…",
+  "diarizing_cpu":"Identifierar talare (CPU — kan ta lång tid)…",
   "transcribing": "Whisper transkriberar…",
   "ocr":          "Tolkar text i bild…",
   "saving":       "Sparar…",
   "done":         "Klart!",
 };
-function updateProgressBar(progress, stage) {
+function updateProgressBar(progress, stage, extra) {
   const wrap = document.getElementById("trans-progress-wrap");
   wrap.classList.remove("hidden");
   document.getElementById("trans-progress-bar-inner").style.width = `${Math.round(progress * 100)}%`;
   document.getElementById("trans-progress-pct").textContent = `${Math.round(progress * 100)}%`;
+  // Show CPU warning when diarizing on CPU
+  let displayStage = stage;
+  if (stage === "diarizing" && extra && extra.diar_device === "cpu") {
+    displayStage = "diarizing_cpu";
+  }
   document.getElementById("trans-progress-stage").textContent =
-    STAGE_LABELS[stage] || stage || "Arbetar…";
+    STAGE_LABELS[displayStage] || stage || "Arbetar…";
 }
 
 // --- Job polling ---
 function pollJob(jobId, onDone, onError) {
   GET(`/api/jobs/${jobId}`).then(res => {
-    updateProgressBar(res.progress || 0, res.stage || "");
+    updateProgressBar(res.progress || 0, res.stage || "", {diar_device: res.diar_device});
     if (res.status === "done") { onDone(res); return; }
     if (res.status === "error") { onError(res.error || "Okänt fel"); return; }
     setTimeout(() => pollJob(jobId, onDone, onError), 2000);
@@ -834,7 +924,7 @@ document.getElementById("btn-voice-cancel")?.addEventListener("click", () => {
 });
 
 document.getElementById("btn-voice-delete")?.addEventListener("click", async () => {
-  if (!confirm("Ta bort röstprofil?")) return;
+  if (!await appConfirm("Ta bort röstprofil?")) return;
   const res = await DEL("/api/voice-profile");
   if (res.ok) {
     _voiceProfileMeta = null;
@@ -1317,7 +1407,143 @@ function _openSourcePanel(tid, transcript) {
   if (ocrPhotosBtn) ocrPhotosBtn.style.display = photos.length > 0 ? "" : "none";
   document.getElementById("source-img-panel").classList.remove("hidden");
   document.getElementById("handle-source")?.classList.remove("hidden");
+  const pinBtn = document.getElementById("btn-pin-mode");
+  if (pinBtn) pinBtn.classList.toggle("hidden", !hasSourceImg);
+  if (!hasSourceImg && pinModeEnabled) pinModeEnabled = false;
+  _updatePinModeUi();
+  if (hasSourceImg) renderPointPins();
 }
+
+// ---- Point annotations on source image -----------------------------------
+
+function renderPointPins() {
+  const overlay = document.getElementById("point-overlay");
+  if (!overlay) return;
+  overlay.innerHTML = "";
+  const points = (annotations || []).filter(a => a.kind === "point");
+  if (points.length === 0) return;
+
+  // Number map: prefer codebook hierarchy numbers (1, 1.1, ...) when enabled,
+  // otherwise fall back to insertion order per code.
+  const flat = _buildNumberedFlat();
+  const numByCode = {};
+  flat.forEach(c => { if (c.number) numByCode[c.id] = c.number; });
+  const seqByCode = {};
+
+  points.forEach(p => {
+    const code = (project?.codes || []).find(c => c.id === p.code_id);
+    seqByCode[p.code_id] = (seqByCode[p.code_id] || 0) + 1;
+    const label = (numberingEnabled && numByCode[p.code_id])
+      ? numByCode[p.code_id]
+      : String(seqByCode[p.code_id]);
+    const pin = document.createElement("div");
+    pin.className = "point-pin";
+    pin.style.left = (p.x * 100) + "%";
+    pin.style.top  = (p.y * 100) + "%";
+    pin.style.background = code ? code.color : "#888";
+    pin.textContent = label;
+    pin.title = (code ? code.name : p.code_id) + (p.memo ? `\n${p.memo}` : "");
+    pin.dataset.annId = p.id;
+    _attachPinDragHandlers(pin, p);
+    overlay.appendChild(pin);
+  });
+}
+
+// Drag eller klick på en pin. Om muspekaren rör sig >4 px under mousedown
+// tolkas det som drag och pinnen flyttas (PATCH av x/y vid mouseup).
+// Annars öppnas detail-popupen vid pinnens position.
+function _attachPinDragHandlers(pin, ann) {
+  let dragging = false;
+  let moved = false;
+  let startX = 0, startY = 0;
+  let overlayRect = null;
+
+  pin.addEventListener("mousedown", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragging = true;
+    moved = false;
+    startX = e.clientX; startY = e.clientY;
+    const overlay = document.getElementById("point-overlay");
+    overlayRect = overlay.getBoundingClientRect();
+    pin.style.zIndex = 20;
+
+    function onMove(ev) {
+      if (!dragging) return;
+      if (!moved && Math.hypot(ev.clientX - startX, ev.clientY - startY) > 4) {
+        moved = true;
+        pin.classList.add("dragging");
+      }
+      if (moved) {
+        const nx = Math.min(1, Math.max(0, (ev.clientX - overlayRect.left) / overlayRect.width));
+        const ny = Math.min(1, Math.max(0, (ev.clientY - overlayRect.top) / overlayRect.height));
+        pin.style.left = (nx * 100) + "%";
+        pin.style.top  = (ny * 100) + "%";
+        pin.dataset.x = nx; pin.dataset.y = ny;
+      }
+    }
+
+    async function onUp(ev) {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+      dragging = false;
+      pin.style.zIndex = "";
+      pin.classList.remove("dragging");
+      if (!moved) {
+        // treat as click → open detail popup at pin location
+        showAnnDetail(ann.id, { clientX: ev.clientX, clientY: ev.clientY });
+        return;
+      }
+      const nx = parseFloat(pin.dataset.x);
+      const ny = parseFloat(pin.dataset.y);
+      const res = await PATCH(
+        `/api/transcripts/${currentTid}/annotations/${ann.id}`,
+        { x: nx, y: ny }
+      );
+      if (res.ok) {
+        const a = annotations.find(x => x.id === ann.id);
+        if (a) { a.x = nx; a.y = ny; }
+      } else {
+        // revert visual position on error
+        renderPointPins();
+      }
+    }
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  });
+}
+
+let pinModeEnabled = false;
+
+function _updatePinModeUi() {
+  const btn = document.getElementById("btn-pin-mode");
+  const img = document.getElementById("source-img");
+  const hint = document.getElementById("source-img-hint");
+  if (btn) btn.classList.toggle("active", pinModeEnabled);
+  if (img) img.classList.toggle("pin-mode", pinModeEnabled);
+  if (hint) hint.classList.toggle("hidden", !pinModeEnabled);
+}
+
+document.getElementById("btn-pin-mode")?.addEventListener("click", () => {
+  pinModeEnabled = !pinModeEnabled;
+  _updatePinModeUi();
+});
+
+document.getElementById("source-img")?.addEventListener("click", (e) => {
+  if (!pinModeEnabled) return;
+  if (!currentTid) return;
+  const tr = project?.transcripts?.find(t => t.id === currentTid);
+  if (!tr || tr.source !== "image") return;
+  const img = e.currentTarget;
+  const rect = img.getBoundingClientRect();
+  const x = (e.clientX - rect.left) / rect.width;
+  const y = (e.clientY - rect.top) / rect.height;
+  if (x < 0 || x > 1 || y < 0 || y > 1) return;
+  pendingSelection = null;
+  pendingPoint = { x, y };
+  showAnnPopup(e.clientX, e.clientY);
+});
 
 async function loadOcrBoxes(tid) {
   const res = await fetch(`/api/transcripts/${tid}/ocr-boxes`);
@@ -1352,7 +1578,7 @@ document.getElementById("btn-ocr-photos")?.addEventListener("click", async () =>
   btn.title = "Kör OCR…";
   try {
     const res = await POST(`/api/transcripts/${currentTid}/ocr-photos`, {});
-    if (res.error) { alert(res.error); btn.disabled = false; btn.title = "Extrahera text från foton (OCR)"; return; }
+    if (res.error) { await appAlert(res.error); btn.disabled = false; btn.title = "Extrahera text från foton (OCR)"; return; }
     await new Promise((resolve, reject) => {
       function poll() {
         GET(`/api/jobs/${res.job_id}`).then(j => {
@@ -1370,7 +1596,7 @@ document.getElementById("btn-ocr-photos")?.addEventListener("click", async () =>
       renderTranscriptText();
     }
   } catch (e) {
-    alert("OCR misslyckades: " + e);
+    await appAlert("OCR misslyckades: " + e);
   } finally {
     btn.disabled = false;
     btn.title = "Extrahera text från foton (OCR)";
@@ -1417,15 +1643,15 @@ document.getElementById("btn-text-save")?.addEventListener("click", async () => 
   if (!currentTid) return;
   const newText = document.getElementById("text-edit-area").value;
   if (annotations.length > 0) {
-    const ok = confirm("Det finns " + annotations.length + " kodning(ar) på detta transkript. Om du ändrar texten kan deras positioner bli felaktiga. Fortsätta ändå?");
+    const ok = await appConfirm("Det finns " + annotations.length + " kodning(ar) på detta transkript. Om du ändrar texten kan deras positioner bli felaktiga. Fortsätta ändå?");
     if (!ok) return;
   }
   const res = await PATCH(`/api/transcripts/${currentTid}/text`, { text: newText });
-  if (res.error) { alert(res.error); return; }
+  if (res.error) { await appAlert(res.error); return; }
   currentText = newText;
   exitTextEditMode();
   // Re-render with updated text (annotations stay but may be misaligned — user was warned)
-  renderAnnotations();
+  renderTranscriptText();
 });
 
 // Rename transcript
@@ -1463,7 +1689,7 @@ document.getElementById("btn-text-save")?.addEventListener("click", async () => 
       const res = await PATCH(`/api/transcripts/${currentTid}/rename`, { name: newName });
       if (res.error) {
         span.textContent = currentName;
-        alert(res.error);
+        await appAlert(res.error);
         return;
       }
       // Update in-memory project data
@@ -1618,24 +1844,34 @@ async function undo() {
     const res = await DEL(`/api/transcripts/${action.tid}/annotations/${action.ann.id}`);
     if (res.ok) {
       annotations = annotations.filter(a => a.id !== action.ann.id);
-      updateAnnBadge(); renderTranscriptText();
+      updateAnnBadge(); renderTranscriptText(); renderPointPins();
       pushRedo({ type: "add", tid: action.tid, ann: action.ann });
     } else {
       pushUndo(action);
     }
   } else if (action.type === "delete") {
-    const res = await POST(`/api/transcripts/${action.tid}/annotations`, {
-      code_id: action.ann.code_id, start: action.ann.start, end: action.ann.end,
-      text: action.ann.text, memo: action.ann.memo || "",
-    });
+    const res = await POST(`/api/transcripts/${action.tid}/annotations`, _annPostBody(action.ann));
     if (res.ok) {
       annotations.push(res.annotation);
-      updateAnnBadge(); renderTranscriptText();
+      updateAnnBadge(); renderTranscriptText(); renderPointPins();
       pushRedo({ type: "delete", tid: action.tid, ann: res.annotation });
     } else {
       pushUndo(action);
     }
   }
+}
+
+function _annPostBody(a) {
+  if (a.kind === "point") {
+    return {
+      kind: "point", code_id: a.code_id, x: a.x, y: a.y,
+      memo: a.memo || "", weight: a.weight ?? 50, anchor: !!a.anchor,
+    };
+  }
+  return {
+    code_id: a.code_id, start: a.start, end: a.end, text: a.text,
+    memo: a.memo || "", weight: a.weight ?? 50, anchor: !!a.anchor,
+  };
 }
 
 async function redo() {
@@ -1646,13 +1882,10 @@ async function redo() {
 
   if (action.type === "add") {
     // Re-add annotation
-    const res = await POST(`/api/transcripts/${action.tid}/annotations`, {
-      code_id: action.ann.code_id, start: action.ann.start, end: action.ann.end,
-      text: action.ann.text, memo: action.ann.memo || "",
-    });
+    const res = await POST(`/api/transcripts/${action.tid}/annotations`, _annPostBody(action.ann));
     if (res.ok) {
       annotations.push(res.annotation);
-      updateAnnBadge(); renderTranscriptText();
+      updateAnnBadge(); renderTranscriptText(); renderPointPins();
       pushUndo({ type: "add", tid: action.tid, ann: res.annotation });
     } else {
       pushRedo(action);
@@ -1662,7 +1895,7 @@ async function redo() {
     const res = await DEL(`/api/transcripts/${action.tid}/annotations/${action.ann.id}`);
     if (res.ok) {
       annotations = annotations.filter(a => a.id !== action.ann.id);
-      updateAnnBadge(); renderTranscriptText();
+      updateAnnBadge(); renderTranscriptText(); renderPointPins();
       pushUndo({ type: "delete", tid: action.tid, ann: action.ann });
     } else {
       pushRedo(action);
@@ -1720,6 +1953,7 @@ function showAnnPopup(x, y) {
 function hideAnnPopup() {
   document.getElementById("ann-popup").classList.add("hidden");
   pendingSelection = null;
+  pendingPoint = null;
   // Only clear the visual selection on explicit close (Cancel / Escape / Confirm),
   // not when called from the mousedown backdrop handler above.
   window.getSelection()?.removeAllRanges();
@@ -1730,27 +1964,43 @@ function renderAnnCodeList() {
 }
 
 document.getElementById("btn-ann-confirm").addEventListener("click", async () => {
-  if (!pendingSelection) return;
+  if (!pendingSelection && !pendingPoint) return;
   const selected = document.querySelector(".ann-code-option.selected");
-  if (!selected) { alert(t("alert.pick.code")); return; }
+  if (!selected) { await appAlert(t("alert.pick.code")); return; }
   const memo   = document.getElementById("ann-memo").value;
   const weight = useWeightEnabled ? parseInt(document.getElementById("ann-weight")?.value || "50", 10) : 50;
-  const res = await POST(`/api/transcripts/${currentTid}/annotations`, {
-    code_id: selected.dataset.codeId,
-    start:  pendingSelection.start,
-    end:    pendingSelection.end,
-    text:   pendingSelection.text,
-    memo,
-    weight,
-  });
+
+  let body;
+  if (pendingPoint) {
+    body = {
+      kind: "point",
+      code_id: selected.dataset.codeId,
+      x: pendingPoint.x, y: pendingPoint.y,
+      memo, weight,
+    };
+  } else {
+    body = {
+      code_id: selected.dataset.codeId,
+      start: pendingSelection.start,
+      end:   pendingSelection.end,
+      text:  pendingSelection.text,
+      memo, weight,
+    };
+  }
+
+  const res = await POST(`/api/transcripts/${currentTid}/annotations`, body);
   if (res.ok) {
     annotations.push(res.annotation);
     updateAnnBadge();
-    renderTranscriptText();
+    if (res.annotation.kind === "point") {
+      renderPointPins();
+    } else {
+      renderTranscriptText();
+    }
     pushUndo({ type: "add", tid: currentTid, ann: res.annotation });
     redoStack = [];
   } else {
-    alert(`Kunde inte spara kodning: ${res.error || "okänt fel"}`);
+    await appAlert(`Kunde inte spara kodning: ${res.error || "okänt fel"}`);
   }
   hideAnnPopup();
 });
@@ -1760,7 +2010,7 @@ document.getElementById("btn-ann-cancel").addEventListener("click", hideAnnPopup
 // ---------------------------------------------------------------------------
 // Annotation detail (click on highlight)
 // ---------------------------------------------------------------------------
-function showAnnDetail(annId) {
+function showAnnDetail(annId, posOverride) {
   pendingAnnId = annId;
   const ann = annotations.find(a => a.id === annId);
   if (!ann) return;
@@ -1784,8 +2034,18 @@ function showAnnDetail(annId) {
     if (ac) ac.checked = !!ann.anchor;
   }
 
-  const span = document.querySelector(`[data-ann-id="${annId}"]`);
-  const rect = span ? span.getBoundingClientRect() : { left: 200, bottom: 200 };
+  // Prefer an explicit position (e.g. pin click), then the pin element, then
+  // the text-span for text annotations, then a sensible fallback.
+  let rect;
+  if (posOverride) {
+    rect = { left: posOverride.clientX, bottom: posOverride.clientY };
+  } else if (ann.kind === "point") {
+    const pinEl = document.querySelector(`.point-pin[data-ann-id="${annId}"]`);
+    rect = pinEl ? pinEl.getBoundingClientRect() : { left: 200, bottom: 200 };
+  } else {
+    const span = document.querySelector(`[data-ann-id="${annId}"]`);
+    rect = span ? span.getBoundingClientRect() : { left: 200, bottom: 200 };
+  }
   const detail = document.getElementById("ann-detail");
   detail.classList.remove("hidden");
   positionPopup(detail, rect.left, rect.bottom + window.scrollY);
@@ -1813,13 +2073,14 @@ document.getElementById("btn-ann-update").addEventListener("click", async () => 
 
 document.getElementById("btn-ann-remove").addEventListener("click", async () => {
   if (!pendingAnnId) return;
-  if (!confirm(t("confirm.del.ann"))) return;
+  if (!await appConfirm(t("confirm.del.ann"))) return;
   const annToDelete = annotations.find(a => a.id === pendingAnnId);
   const res = await DEL(`/api/transcripts/${currentTid}/annotations/${pendingAnnId}`);
   if (res.ok) {
     annotations = annotations.filter(a => a.id !== pendingAnnId);
     updateAnnBadge();
     renderTranscriptText();
+    renderPointPins();
     if (annToDelete) {
       pushUndo({ type: "delete", tid: currentTid, ann: annToDelete });
       redoStack = [];
@@ -1911,6 +2172,7 @@ function openCodeModal(code, prefillName) {
 }
 
 document.getElementById("btn-code-cancel").addEventListener("click", () => {
+  _pendingCodeFromAnn = null;
   document.getElementById("modal-code").classList.add("hidden");
 });
 
@@ -1924,6 +2186,9 @@ document.getElementById("btn-code-confirm").addEventListener("click", async () =
   errEl.textContent = "";
   if (!name) { errEl.textContent = "Namn krävs."; return; }
 
+  // Snapshot existing code IDs so we can identify the newly created code below.
+  const prevIds = new Set((project && project.codes ? project.codes : []).map(c => c.id));
+
   let res;
   if (id) {
     res = await PATCH(`/api/codes/${id}`, { name, parent, color, description: desc });
@@ -1936,12 +2201,36 @@ document.getElementById("btn-code-confirm").addEventListener("click", async () =
   if (currentTid) renderTranscriptText(); // Refresh highlight colors
   document.getElementById("modal-code").classList.add("hidden");
   _refreshCodebookManagerIfOpen();
+
+  // If this create came from the annotation popup, apply the new code to the
+  // selection or point that was active when the popup was open.
+  if (!id && currentTid && (_pendingCodeFromAnn || _pendingCodeFromPoint)) {
+    const sel = _pendingCodeFromAnn;
+    const pt  = _pendingCodeFromPoint;
+    _pendingCodeFromAnn = null;
+    _pendingCodeFromPoint = null;
+    const newCode = (project.codes || []).find(c => !prevIds.has(c.id));
+    if (newCode) {
+      const body = pt
+        ? { kind: "point", code_id: newCode.id, x: pt.x, y: pt.y, memo: "", weight: 50 }
+        : { code_id: newCode.id, start: sel.start, end: sel.end, text: sel.text, memo: "", weight: 50 };
+      const annRes = await POST(`/api/transcripts/${currentTid}/annotations`, body);
+      if (annRes.ok) {
+        annotations.push(annRes.annotation);
+        updateAnnBadge();
+        if (annRes.annotation.kind === "point") renderPointPins();
+        else renderTranscriptText();
+        pushUndo({ type: "add", tid: currentTid, ann: annRes.annotation });
+        redoStack = [];
+      }
+    }
+  }
 });
 
 document.getElementById("btn-code-delete").addEventListener("click", async () => {
   const id = document.getElementById("code-edit-id").value;
   if (!id) return;
-  if (!confirm(t("confirm.del.code"))) return;
+  if (!await appConfirm(t("confirm.del.code"))) return;
   const res = await DEL(`/api/codes/${id}`);
   if (res.ok) {
     project = res.project;
@@ -2300,12 +2589,12 @@ document.getElementById("codebook-tree").addEventListener("contextmenu", e => {
   codeCtxMenu.classList.remove("hidden");
 });
 
-document.getElementById("ctx-code-rename").addEventListener("click", () => {
+document.getElementById("ctx-code-rename").addEventListener("click", async () => {
   codeCtxMenu.classList.add("hidden");
   if (!_ctxCodeId || !project) return;
   const code = (project.codes || []).find(c => c.id === _ctxCodeId);
   if (!code) return;
-  const newName = prompt(t("ctx.code.rename.prompt") || "Nytt namn:", code.name);
+  const newName = await appPrompt(t("ctx.code.rename.prompt") || "Nytt namn:", code.name);
   if (!newName || !newName.trim() || newName.trim() === code.name) return;
   PATCH(`/api/codes/${_ctxCodeId}`, {
     name: newName.trim(),
@@ -2313,7 +2602,7 @@ document.getElementById("ctx-code-rename").addEventListener("click", () => {
     color: code.color,
     description: code.description || "",
   }).then(res => {
-    if (res.error) { alert(res.error); return; }
+    if (res.error) { appAlert(res.error); return; }
     project = res.project;
     renderCodebook();
     _refreshCodebookManagerIfOpen();
@@ -2671,7 +2960,7 @@ document.getElementById("fmt-bold")  .addEventListener("click", () => applyForma
 document.getElementById("fmt-italic").addEventListener("click", () => applyFormatToSelection("italic"));
 
 async function applyFormatToSelection(fmtType) {
-  if (!currentTid) { alert(t("alert.no.transcript.fmt")); return; }
+  if (!currentTid) { await appAlert(t("alert.no.transcript.fmt")); return; }
   const sel = window.getSelection();
   if (!sel || sel.isCollapsed) return;
   const selText = sel.toString();
@@ -3355,10 +3644,15 @@ function setupAnnSearch() {
   }
 }
 
-// "Create new code" from popup
+// "Create new code" from popup — preserves the active selection/point so the
+// new code gets applied to it once the user confirms the create-code modal.
+let _pendingCodeFromAnn = null;   // {start, end, text} or null
+let _pendingCodeFromPoint = null; // {x, y} or null
 document.getElementById("btn-ann-create-code").addEventListener("click", () => {
   const q = (document.getElementById("ann-search").value || "").trim();
   if (!q) return;
+  _pendingCodeFromAnn   = pendingSelection ? { ...pendingSelection } : null;
+  _pendingCodeFromPoint = pendingPoint     ? { ...pendingPoint }     : null;
   hideAnnPopup();
   openCodeModal(null, q);
 });
@@ -3379,6 +3673,40 @@ document.addEventListener("click", e => {
     document.getElementById("settings-popover").classList.add("hidden");
   }
 });
+
+// --- System info (loaded once, shown in settings popover) ---
+(function loadSystemInfo() {
+  GET("/api/system-info").then(info => {
+    const box = document.getElementById("system-info-box");
+    if (!box) return;
+    const lines = [];
+    if (info.ram_gb) lines.push(`RAM: ${info.ram_gb} GB`);
+    if (info.gpu && info.gpu !== "none") {
+      lines.push(`GPU: ${info.gpu.toUpperCase()}`);
+    }
+    if (info.disk_free_gb) lines.push(`${currentLang === "sv" ? "Disk ledig" : "Disk free"}: ${info.disk_free_gb} GB`);
+
+    const warns = info.warnings || [];
+    if (warns.includes("no_gpu")) {
+      lines.push(`<span class="sys-warn">${currentLang === "sv"
+        ? "Ingen GPU — diarisering kommer köras på CPU (långsamt)"
+        : "No GPU — diarization will run on CPU (slow)"}</span>`);
+    }
+    if (warns.includes("low_ram")) {
+      lines.push(`<span class="sys-warn">${currentLang === "sv"
+        ? "Lite RAM — transkription kan bli långsam"
+        : "Low RAM — transcription may be slow"}</span>`);
+    }
+    if (warns.includes("low_disk")) {
+      lines.push(`<span class="sys-warn">${currentLang === "sv"
+        ? "Lite diskutrymme — ML-modeller kräver ~2 GB"
+        : "Low disk space — ML models require ~2 GB"}</span>`);
+    }
+
+    box.innerHTML = lines.join("<br>");
+    box.classList.remove("hidden");
+  }).catch(() => { /* system-info endpoint unavailable — skip silently */ });
+})();
 
 
 // ============================================================
@@ -3719,19 +4047,54 @@ function _initWaveform(tid) {
     wfTime.textContent = `${_fmtTime(audioPlayer.currentTime)} / ${_fmtTime(audioPlayer.duration || 0)}`;
   }
 
-  wfPlayBtn?.addEventListener("click", () => {
+  const _refreshPlayBtn = () => {
+    if (wfPlayBtn) wfPlayBtn.textContent = audioPlayer && !audioPlayer.paused ? "⏸" : "▶";
+  };
+  const togglePlayPause = () => {
     if (!audioPlayer) return;
     if (audioPlayer.paused) { audioPlayer.play().catch(() => {}); }
     else { audioPlayer.pause(); }
-  });
-  audioPlayer?.addEventListener("play",  () => { if (wfPlayBtn) wfPlayBtn.textContent = "⏸"; });
-  audioPlayer?.addEventListener("pause", () => { if (wfPlayBtn) wfPlayBtn.textContent = "▶"; });
+    _refreshPlayBtn();
+  };
+  const onPlay  = _refreshPlayBtn;
+  const onPause = _refreshPlayBtn;
+  const onEnded = _refreshPlayBtn;
+  const onVolume = () => { if (audioPlayer && wfVolume) audioPlayer.volume = wfVolume.value; };
+
+  // Spacebar shortcut — gated by checkbox, persisted in localStorage
+  const wfSpaceBox = document.getElementById("wf-space-enabled");
+  if (wfSpaceBox) {
+    const saved = localStorage.getItem("wf_space_enabled");
+    wfSpaceBox.checked = saved === null ? true : saved === "1";
+  }
+  const onSpaceToggle = () => {
+    if (wfSpaceBox) localStorage.setItem("wf_space_enabled", wfSpaceBox.checked ? "1" : "0");
+  };
+  const onKeydown = (ev) => {
+    if (ev.code !== "Space" && ev.key !== " ") return;
+    if (!wfSpaceBox || !wfSpaceBox.checked) return;
+    const t = ev.target;
+    const tag = (t && t.tagName) ? t.tagName.toUpperCase() : "";
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || (t && t.isContentEditable)) return;
+    ev.preventDefault();
+    togglePlayPause();
+  };
+
+  wfPlayBtn?.addEventListener("click", togglePlayPause);
+  audioPlayer?.addEventListener("play",  onPlay);
+  audioPlayer?.addEventListener("pause", onPause);
+  audioPlayer?.addEventListener("ended", onEnded);
   audioPlayer?.addEventListener("timeupdate", _updateWfTime);
   audioPlayer?.addEventListener("durationchange", _updateWfTime);
-  wfVolume?.addEventListener("input", () => { if (audioPlayer) audioPlayer.volume = wfVolume.value; });
+  wfVolume?.addEventListener("input", onVolume);
+  wfSpaceBox?.addEventListener("change", onSpaceToggle);
+  document.addEventListener("keydown", onKeydown);
 
   // Keep waveform progress in sync with audio player
   audioPlayer?.addEventListener("timeupdate", _syncWaveformToPlayer);
+
+  _refreshPlayBtn();
+  _wfHandlers = { togglePlayPause, onPlay, onPause, onEnded, onVolume, onSpaceToggle, onKeydown, _updateWfTime };
 
 }
 
@@ -3743,7 +4106,23 @@ function _syncWaveformToPlayer() {
 }
 
 function _destroyWaveform() {
-  document.getElementById("audio-player")?.removeEventListener("timeupdate", _syncWaveformToPlayer);
+  const ap = document.getElementById("audio-player");
+  ap?.removeEventListener("timeupdate", _syncWaveformToPlayer);
+  if (_wfHandlers) {
+    const btn = document.getElementById("wf-play-pause");
+    const vol = document.getElementById("wf-volume");
+    const spc = document.getElementById("wf-space-enabled");
+    btn?.removeEventListener("click", _wfHandlers.togglePlayPause);
+    ap?.removeEventListener("play",  _wfHandlers.onPlay);
+    ap?.removeEventListener("pause", _wfHandlers.onPause);
+    ap?.removeEventListener("ended", _wfHandlers.onEnded);
+    ap?.removeEventListener("timeupdate", _wfHandlers._updateWfTime);
+    ap?.removeEventListener("durationchange", _wfHandlers._updateWfTime);
+    vol?.removeEventListener("input", _wfHandlers.onVolume);
+    spc?.removeEventListener("change", _wfHandlers.onSpaceToggle);
+    document.removeEventListener("keydown", _wfHandlers.onKeydown);
+    _wfHandlers = null;
+  }
   if (_wavesurfer) {
     try { _wavesurfer.destroy(); } catch (_) {}
     _wavesurfer = null;

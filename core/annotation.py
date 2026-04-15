@@ -48,21 +48,28 @@ def save_annotations(folder: str, tid: str, coder: str, annotations: list):
 # ---------------------------------------------------------------------------
 
 def add_annotation(folder: str, tid: str, coder: str,
-                   code_id: str, start: int, end: int,
-                   text: str, memo: str = "",
-                   weight: int = 50, anchor: bool = False) -> dict:
+                   code_id: str, memo: str = "",
+                   weight: int = 50, anchor: bool = False,
+                   kind: str = "text",
+                   start: int = None, end: int = None, text: str = None,
+                   x: float = None, y: float = None) -> dict:
     annotations = load_annotations(folder, tid, coder)
     ann = {
         "id": str(uuid.uuid4())[:8],
         "code_id": code_id,
-        "start": start,
-        "end": end,
-        "text": text,
+        "kind": kind,
         "memo": memo,
         "weight": int(weight),
         "anchor": bool(anchor),
         "created": _now(),
     }
+    if kind == "point":
+        ann["x"] = float(x)
+        ann["y"] = float(y)
+    else:
+        ann["start"] = start
+        ann["end"] = end
+        ann["text"] = text
     annotations.append(ann)
     save_annotations(folder, tid, coder, annotations)
     return ann
@@ -74,11 +81,14 @@ def update_annotation(folder: str, tid: str, coder: str,
     for ann in annotations:
         if ann["id"] == ann_id:
             for k, v in kwargs.items():
-                if k in ("code_id", "memo", "weight", "anchor"):
+                if k in ("code_id", "memo", "weight", "anchor", "x", "y"):
                     if k == "weight":
                         ann[k] = int(v)
                     elif k == "anchor":
                         ann[k] = bool(v)
+                    elif k in ("x", "y"):
+                        if ann.get("kind") == "point":
+                            ann[k] = float(v)
                     else:
                         ann[k] = v
             save_annotations(folder, tid, coder, annotations)

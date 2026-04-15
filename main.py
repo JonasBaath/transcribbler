@@ -8,6 +8,7 @@ import logging
 import os
 import sys
 import threading
+import time
 import uuid
 import webbrowser
 from pathlib import Path
@@ -49,10 +50,31 @@ STATE = {
 
 # ---------------------------------------------------------------------------
 # Background job store
-# Each job: {status, stage, progress, result, error, _audio_tmp}
+# Each job: {status, stage, progress, result, error, _audio_tmp, _finished_at}
 # status: "pending" | "running" | "done" | "error"
 # ---------------------------------------------------------------------------
 JOBS = {}
+JOB_EXPIRY_SECONDS = 600  # auto-clean finished jobs after 10 minutes
+
+
+def _cleanup_expired_jobs():
+    """Remove finished/errored jobs older than JOB_EXPIRY_SECONDS and their temp files."""
+    now = time.monotonic()
+    expired = [
+        jid for jid, job in JOBS.items()
+        if job.get("_finished_at") and now - job["_finished_at"] > JOB_EXPIRY_SECONDS
+    ]
+    for jid in expired:
+        job = JOBS.pop(jid, {})
+        # Clean up any leftover temp audio file
+        audio_path = (job.get("result") or {}).get("audio_path")
+        if audio_path:
+            try:
+                Path(audio_path).unlink(missing_ok=True)
+            except Exception:
+                pass
+        logger.info("Expired job %s cleaned up", jid)
+
 
 # Lock som serialiserar alla skrivoperationer mot project.json
 # Skyddar mot race condition när flera OCR/audio-jobb körs parallellt.
@@ -294,10 +316,10 @@ def _transcription_job(job_id: str, audio_path: str, folder: str,
     audio_path is a temp file owned by this job; cleaned up on commit or error.
     """
     import tempfile
-    from core.transcribe import (transcribe_with_diarization,
+    from core.transcribe import (transcribe_with_diarization, transcribe_with_gaps,
                                   transcribe, is_audio, get_model_label,
                                   extract_speaker_embeddings, match_voice_profile,
-                                  load_voice_profile)
+                                  load_voice_profile, get_diarization_device)
 
     def _progress(stage, fraction):
         JOBS[job_id]["stage"] = stage
@@ -315,15 +337,18 @@ def _transcription_job(job_id: str, audio_path: str, folder: str,
                 audio_path, hf_token, settings, progress_cb=_progress
             )
         else:
-            _progress("loading_model", 0.10)
-            text = transcribe(
+            _progress("loading_model", 0.05)
+            gaps_result = transcribe_with_gaps(
                 audio_path,
                 language=settings.get("language", "sv"),
                 model_size=settings.get("model_size", "medium"),
                 language_choice=settings.get("language_choice", "sv"),
+                progress_cb=_progress,
             )
             _progress("done", 1.0)
-            result = {"text": text, "segments": [], "speakers_found": []}
+            # Keep segments empty for non-diarized transcripts — downstream
+            # rendering treats non-empty segments as speaker-labelled.
+            result = {"text": gaps_result["text"], "segments": [], "speakers_found": []}
 
         # Voice profile matching (only when diarization found speakers)
         voice_matches = {}
@@ -349,6 +374,7 @@ def _transcription_job(job_id: str, audio_path: str, folder: str,
             "segments":       result["segments"],
             "speakers_found": result["speakers_found"],
             "voice_matches":  voice_matches,
+            "diar_device":    get_diarization_device() if use_diarization else None,
             "name":           name,
             "settings":       settings,
             "audio_path":     audio_path,   # kept for commit step
@@ -767,9 +793,13 @@ def upload_transcript():
 @app.route("/api/jobs/<job_id>", methods=["GET"])
 def get_job(job_id):
     """Poll a background transcription job."""
+    _cleanup_expired_jobs()
     job = JOBS.get(job_id)
     if not job:
         return jsonify({"error": "Jobb hittades inte."}), 404
+    # Stamp finish time on first poll after completion (for expiry cleanup)
+    if job["status"] in ("done", "error") and "_finished_at" not in job:
+        job["_finished_at"] = time.monotonic()
     result = job["result"] or {}
     return jsonify({
         "status":   job["status"],
@@ -779,6 +809,7 @@ def get_job(job_id):
         # audio job fields
         "speakers_found": result.get("speakers_found", []),
         "voice_matches":  result.get("voice_matches", {}),
+        "diar_device":    result.get("diar_device"),
         # image OCR job fields
         "source":  result.get("source"),
         "project": result.get("project"),
@@ -856,6 +887,77 @@ def commit_transcript(job_id):
     JOBS.pop(job_id, None)
 
     return jsonify({"ok": True, "project": updated})
+
+
+# ---------------------------------------------------------------------------
+# System info — helps users understand hardware capabilities
+# ---------------------------------------------------------------------------
+
+@app.route("/api/system-info", methods=["GET"])
+def system_info():
+    """Return system capabilities relevant to transcription performance."""
+    import platform
+    import shutil
+
+    info = {
+        "os": platform.system(),
+        "os_version": platform.version(),
+        "machine": platform.machine(),
+        "python": platform.python_version(),
+        "ram_gb": None,
+        "gpu": "none",
+        "disk_free_gb": None,
+    }
+
+    # RAM
+    try:
+        import psutil
+        info["ram_gb"] = round(psutil.virtual_memory().total / (1024 ** 3), 1)
+    except ImportError:
+        # psutil not installed — try os-specific fallbacks
+        try:
+            if platform.system() == "Darwin":
+                import subprocess
+                mem = subprocess.check_output(["sysctl", "-n", "hw.memsize"]).strip()
+                info["ram_gb"] = round(int(mem) / (1024 ** 3), 1)
+            elif platform.system() == "Linux":
+                with open("/proc/meminfo") as f:
+                    for line in f:
+                        if line.startswith("MemTotal"):
+                            kb = int(line.split()[1])
+                            info["ram_gb"] = round(kb / (1024 ** 2), 1)
+                            break
+        except Exception:
+            pass
+
+    # GPU
+    try:
+        import torch
+        if torch.backends.mps.is_available():
+            info["gpu"] = "mps"
+        elif torch.cuda.is_available():
+            info["gpu"] = f"cuda ({torch.cuda.get_device_name(0)})"
+    except Exception:
+        pass
+
+    # Disk free
+    try:
+        usage = shutil.disk_usage(Path.home())
+        info["disk_free_gb"] = round(usage.free / (1024 ** 3), 1)
+    except Exception:
+        pass
+
+    # Warnings
+    warnings = []
+    if info["ram_gb"] and info["ram_gb"] < 6:
+        warnings.append("low_ram")
+    if info["gpu"] == "none":
+        warnings.append("no_gpu")
+    if info["disk_free_gb"] and info["disk_free_gb"] < 4:
+        warnings.append("low_disk")
+    info["warnings"] = warnings
+
+    return jsonify(info)
 
 
 # ---------------------------------------------------------------------------
@@ -1468,19 +1570,34 @@ def add_annotation(tid):
     if err:
         return err
     data = request.json
-    required = {"code_id", "start", "end", "text"}
-    if not required.issubset(data):
-        return jsonify({"error": f"Fält saknas: {required - data.keys()}"}), 400
-    ann = ann_mod.add_annotation(
-        STATE["folder"], tid, STATE["coder"],
-        code_id=data["code_id"],
-        start=data["start"],
-        end=data["end"],
-        text=data["text"],
-        memo=data.get("memo", ""),
-        weight=int(data.get("weight", 50)),
-        anchor=bool(data.get("anchor", False)),
-    )
+    kind = data.get("kind", "text")
+    if kind == "point":
+        required = {"code_id", "x", "y"}
+        if not required.issubset(data):
+            return jsonify({"error": f"Fält saknas: {required - data.keys()}"}), 400
+        ann = ann_mod.add_annotation(
+            STATE["folder"], tid, STATE["coder"],
+            code_id=data["code_id"],
+            kind="point",
+            x=data["x"], y=data["y"],
+            memo=data.get("memo", ""),
+            weight=int(data.get("weight", 50)),
+            anchor=bool(data.get("anchor", False)),
+        )
+    else:
+        required = {"code_id", "start", "end", "text"}
+        if not required.issubset(data):
+            return jsonify({"error": f"Fält saknas: {required - data.keys()}"}), 400
+        ann = ann_mod.add_annotation(
+            STATE["folder"], tid, STATE["coder"],
+            code_id=data["code_id"],
+            start=data["start"],
+            end=data["end"],
+            text=data["text"],
+            memo=data.get("memo", ""),
+            weight=int(data.get("weight", 50)),
+            anchor=bool(data.get("anchor", False)),
+        )
     return jsonify({"ok": True, "annotation": ann})
 
 
