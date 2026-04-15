@@ -23,6 +23,9 @@ Thumbs.db
 
 # Project data (user content)
 TestProject/
+annotations/
+notes/
+transcripts/
 
 # Claude Code dev files
 .claude/
