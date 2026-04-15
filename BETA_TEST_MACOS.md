@@ -1,14 +1,12 @@
 # Transcribbler — Betatest (macOS)
 
-**Version:** v0.1.0-beta
-**Plattform:** macOS 12 Monterey eller nyare, Apple Silicon (M1/M2/M3/M4)
+**Version:** v0.1.0
+**Plattform:** macOS 12 Monterey eller nyare (arm64 för Apple Silicon M1–M4, x64 för Intel-Mac)
 **Repo:** https://github.com/JonasBaath/transcribbler
 
-Tack för att du testar Transcribbler! Följ stegen nedan i ordning. För varje steg: notera om det gick OK eller FAIL, och skriv kort vad som hände om något krånglade. Du behöver inte installera Python, Node eller något annat — allt ligger bundlat i appen.
+Tack för att du testar Transcribbler! Följ stegen nedan i ordning. För varje steg: notera om det gick OK eller FAIL, och skriv kort vad som hände om något krånglade. Du behöver inte installera Python, Node eller något annat — allt (inklusive ML-beroenden som Whisper, EasyOCR och pyannote) ligger bundlat i appen.
 
-**Tidsåtgång:** ca 20–30 minuter.
-
-**Observera:** Denna betaversion innehåller INTE ML-funktioner (bildimport med OCR, ljudtranskription med Whisper, talardiarization, röstprofil). Hoppa över de stegen — de markeras tydligt nedan.
+**Tidsåtgång:** ca 30–45 minuter (ML-stegen kan ta extra tid första gången pga modell-nedladdning).
 
 ---
 
@@ -16,7 +14,9 @@ Tack för att du testar Transcribbler! Följ stegen nedan i ordning. För varje 
 
 ### 1.1 Ladda ner
 
-Gå till https://github.com/JonasBaath/transcribbler/releases och ladda ner den senaste filen som slutar på `-arm64.dmg`.
+Gå till https://github.com/JonasBaath/transcribbler/releases och ladda ner:
+- **Apple Silicon (M1–M4):** filen som slutar på `-arm64.dmg`
+- **Intel-Mac:** filen som slutar på `.dmg` (utan `-arm64`)
 
 ### 1.2 Installera
 
@@ -144,16 +144,48 @@ Stäng projektet, öppna igen, ange FEL lösenord.
 
 ---
 
-## DEL 3 — Hoppa över (ML-funktioner ej i denna beta)
+## DEL 3 — ML-funktioner
 
-Följande knappar/menyval kommer INTE fungera i denna betaversion. Om du provar dem kan du få felmeddelanden — det är förväntat, inte en bugg:
+ML-beroendena är inbakade i appen. Första gången du kör varje funktion laddas modellen ner (flera hundra MB – några GB). Påföljande körningar är snabbare.
 
-- **Bildimport med OCR** (tolka tidningssidor, fotografier av text)
-- **Ljudtranskription** (Whisper — omvandla .wav/.m4a till text)
-- **Röstprofil-inspelning**
-- **Talardiarization** (identifiera olika talare)
+Testfixturer finns i repo-klonen under `tests/fixtures/` (eller ladda ner dem separat från GitHub):
+- `test_image.jpeg` — tidningsomslag med synlig text ("ROCKENS FOLKPARTISTER" m.fl.)
+- `test_audio.wav` — ca 30 s svenskt tal
 
-Om du är nyfiken får du gärna prova och rapportera vad felmeddelandet säger — men det blockerar inte testet.
+### 3.1 Bildimport med OCR (EasyOCR)
+
+1. Importera `test_image.jpeg` via UI med kryssrutan **"Transkribera text i bild"** / **"Image OCR"** ikryssad.
+
+**Förväntat:** EasyOCR kör och text extraheras. Några ord bör kännas igen — särskilt de stora rubrikerna. Stiliserade logotyper kan misslyckas — acceptabelt.
+
+**Rapportera:** modell-nedladdningstid, körtid, vilka ord som extraherades korrekt, eventuella problem med åäö.
+
+### 3.2 Ljudtranskription (Whisper)
+
+1. Importera `test_audio.wav` via UI.
+2. Välj språk (svenska → KB-Whisper, engelska → Whisper Medium).
+3. Starta transkribering **utan** diarization först.
+
+**Förväntat:** Modell laddas ner (flera GB första gången). Transkribering slutförs och text visas.
+
+**Rapportera:** körtid, kvalitet.
+
+### 3.3 Talardiarization (valfritt — kräver HF-token)
+
+Kräver Hugging Face-token med godkänd licens för `pyannote/speaker-diarization-3.1`.
+
+Om du har en token:
+1. Ange token i **Inställningar**.
+2. Importera ljudfil med flera talare.
+3. Kör transkribering **med** diarization.
+
+**Förväntat:** Talare separeras och markeras i transkriptet.
+
+Om ingen token finns: hoppa över och rapportera.
+
+### 3.4 Röstprofil-inspelning (valfritt)
+
+Prova funktionen för röstprofil om du har mikrofon. Rapportera vad som händer.
 
 ---
 
@@ -185,6 +217,10 @@ Skicka en sammanställning till jonas.baath@slu.se med följande:
 2.14 Stäng + öppna igen: OK / FAIL — [kommentar]
 2.15 Fel lösenord: OK / FAIL — [kommentar]
 2.16 Två instanser: OK / FAIL — [kommentar]
+3.1 OCR (EasyOCR): OK / FAIL — [kommentar]
+3.2 Whisper-transkription: OK / FAIL — [kommentar]
+3.3 Diarization: OK / FAIL / Ej testat — [kommentar]
+3.4 Röstprofil: OK / FAIL / Ej testat — [kommentar]
 ```
 
 **Allmänt intryck:**
