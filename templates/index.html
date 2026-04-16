@@ -34,7 +34,10 @@
         <button class="tab-btn active" data-tab="open" data-i18n="tab.open">Öppna projekt</button>
         <button class="tab-btn" data-tab="new" data-i18n="tab.new">Nytt projekt</button>
       </div>
-      <button class="btn-sm lang-toggle" id="btn-lang-splash">EN</button>
+      <div style="display:flex;gap:4px">
+        <button class="btn-sm" id="btn-theme-splash" title="Byt tema">☀</button>
+        <button class="btn-sm lang-toggle" id="btn-lang-splash">EN</button>
+      </div>
     </div>
 
     <!-- Open -->
@@ -55,7 +58,10 @@
         <input type="text" id="open-coder"
           data-i18n-ph="open.coder.ph" placeholder="anna" />
       </label>
-      <button class="btn-primary" id="btn-open" data-i18n="btn.open">Öppna</button>
+      <div class="open-btn-row">
+        <button class="btn-primary" id="btn-open" data-i18n="btn.open">Öppna</button>
+        <button class="btn-ghost hidden" id="btn-cancel-switch" data-i18n="btn.cancel">Avbryt</button>
+      </div>
     </div>
 
     <!-- New -->
@@ -77,7 +83,6 @@
       </label>
       <button class="btn-primary" id="btn-new" data-i18n="btn.create">Skapa projekt</button>
     </div>
-
     <p id="splash-error" class="error-msg"></p>
     <p class="splash-license">
       &copy; Jonas Bååth &middot;
@@ -107,6 +112,10 @@
     </svg>
     <span id="project-title">transcribbler</span>
     <span id="coder-badge"></span>
+    <div id="view-toggle" class="view-toggle">
+      <button class="view-toggle-btn active" id="btn-view-coding">Kodningsvy</button>
+      <button class="view-toggle-btn" id="btn-view-analysis">Analysvy</button>
+    </div>
     <div class="topbar-actions">
       <span class="topbar-spacer"></span>
       <!-- Settings popover -->
@@ -134,8 +143,7 @@
             <span data-i18n="settings.use.waveform">Vågform (ljudfiler)</span>
           </label>
           <div class="settings-divider"></div>
-          <button class="btn-sm settings-btn" id="btn-voice-profile" data-i18n="btn.voice.profile">🎤 Röstprofil</button>
-          <div class="settings-divider"></div>
+          <button class="btn-sm settings-btn" id="btn-voice-profile" data-i18n="btn.voice.profile" hidden>🎤 Röstprofil</button>
           <div id="system-info-box" class="system-info-box hidden"></div>
         </div>
       </div>
@@ -146,7 +154,7 @@
           data-i18n="btn.tools">Verktyg ▾</button>
         <div class="dropdown-content" id="tools-menu">
           <button id="btn-stats"          data-i18n="btn.stats">Statistik</button>
-          <button id="btn-irr"            data-i18n="btn.irr">IRR</button>
+          <button id="btn-irr"            data-i18n="btn.irr" hidden>IRR</button>
           <button id="btn-codebook"       data-i18n="btn.codebook">Kodbok</button>
           <button id="btn-codetree"       data-i18n="btn.codetree">Kodträd</button>
           <button id="btn-code-matrix"    data-i18n="btn.code.matrix">Kodmatris</button>
@@ -288,11 +296,72 @@
       <div id="codebook-tree"></div>
     </aside>
 
+    <!-- ANALYSIS VIEW (hidden by default) -->
+    <div id="analysis-view" class="hidden">
+      <aside id="analysis-codebook">
+        <div class="sidebar-header">
+          <span>Kodbok</span>
+          <div style="display:flex;gap:4px">
+            <button class="btn-sm" id="btn-analysis-all">Alla</button>
+            <button class="btn-sm" id="btn-analysis-none">Inga</button>
+          </div>
+        </div>
+        <div id="analysis-codebook-tree"></div>
+      </aside>
+      <main id="analysis-main">
+        <div id="analysis-toolbar">
+          <div class="analysis-toolbar-group">
+            <label class="inline-label"><input type="radio" name="analysis-display" value="separate" checked /> Separat</label>
+            <label class="inline-label"><input type="radio" name="analysis-display" value="code_in_code" /> Kod-i-kod</label>
+          </div>
+          <div class="analysis-toolbar-group">
+            <input type="text" id="analysis-search" placeholder="Sök i utdrag…" class="analysis-search-input" />
+          </div>
+          <div class="analysis-toolbar-group">
+            <label class="inline-label"><input type="checkbox" id="analysis-show-memos" /> Memos</label>
+            <label class="inline-label"><input type="checkbox" id="analysis-anchor-only" /> Nyckelpassage</label>
+          </div>
+          <div class="analysis-toolbar-group">
+            <label class="inline-label" data-i18n-title="analysis.export.mode.tooltip" title="Aktivera för att välja enskilda citat att exportera"><input type="checkbox" id="analysis-export-mode" /> Exportläge</label>
+          </div>
+          <div class="analysis-toolbar-group analysis-toolbar-export">
+            <button class="btn-sm btn-primary" id="btn-analysis-export">Exportera</button>
+          </div>
+        </div>
+        <div id="analysis-content"></div>
+      </main>
+    </div>
+
   </div><!-- /workspace -->
 
 </div><!-- /app -->
 
 <!-- ===== MODALS ===== -->
+
+<!-- Analysis export modal -->
+<div id="modal-analysis-export" class="overlay hidden">
+  <div class="dialog">
+    <h2>Exportera analys</h2>
+    <div class="export-field-group" id="analysis-export-type-group">
+      <label class="settings-row"><input type="radio" name="analysis-export-type" value="codes" checked /> <span data-i18n="analysis.export.codes">Exportera valda koder</span></label>
+      <label class="settings-row"><input type="radio" name="analysis-export-type" value="excerpts" /> <span data-i18n="analysis.export.excerpts">Exportera markerade citat</span></label>
+      <label class="settings-row"><input type="radio" name="analysis-export-type" value="all" /> <span data-i18n="analysis.export.all">Exportera allt</span></label>
+      <label class="settings-row"><input type="radio" name="analysis-export-type" value="key" /> <span data-i18n="analysis.export.key">Exportera nyckelpassager</span></label>
+    </div>
+    <div class="export-field-group" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+      <button class="btn-sm analysis-fmt-btn" data-format="docx">DOCX</button>
+      <button class="btn-sm analysis-fmt-btn" data-format="odt">ODT</button>
+      <button class="btn-sm analysis-fmt-btn" data-format="md">MD</button>
+      <button class="btn-sm analysis-fmt-btn" data-format="csv">CSV</button>
+      <button class="btn-sm analysis-fmt-btn" data-format="pdf">PDF</button>
+      <button class="btn-sm analysis-fmt-btn" data-format="png">PNG</button>
+    </div>
+    <div id="analysis-export-status" style="font-size:13px;margin:8px 0"></div>
+    <div class="dialog-actions">
+      <button class="btn-ghost" id="btn-analysis-export-close">Stäng</button>
+    </div>
+  </div>
+</div>
 
 <!-- Transcript context menu -->
 <div id="transcript-ctx-menu" class="ctx-menu hidden">
@@ -452,7 +521,7 @@
           </details>
 
           <!-- Auto-identify from voice profile -->
-          <div id="diar-auto-identify-row" class="diar-row hidden">
+          <div id="diar-auto-identify-row" class="diar-row hidden" hidden>
             <label>
               <input type="checkbox" id="diar-auto-identify" />
               <span data-i18n="diar.auto.identify">Identifiera min röst automatiskt</span>
@@ -654,6 +723,12 @@
         <span id="ann-weight-val">50</span>
       </label>
     </div>
+    <div id="ann-anchor-row">
+      <label class="ann-anchor-label">
+        <input type="checkbox" id="ann-anchor" />
+        <span data-i18n="ann.anchor.label">Nyckelpassage</span>
+      </label>
+    </div>
     <div class="ann-popup-actions">
       <button class="btn-primary btn-sm" id="btn-ann-confirm" data-i18n="btn.code">Koda</button>
       <button class="btn-ghost btn-sm" id="btn-ann-cancel" data-i18n="btn.cancel">Avbryt</button>
@@ -772,16 +847,38 @@
     <div class="cb-mgr-header">
       <h2 data-i18n="btn.codebook">Kodbok</h2>
       <div class="codetree-export-bar">
-        <a class="btn-sm" href="/api/export/codebook/csv"  download="kodbok.csv">CSV</a>
-        <a class="btn-sm" href="/api/export/markdown/codebook" download="kodbok.md">MD</a>
-        <a class="btn-sm" href="/api/export/codetree/docx" download="kodbok.docx">DOCX</a>
-        <a class="btn-sm" href="/api/export/codetree/odt"  download="kodbok.odt">ODT</a>
+        <a class="btn-sm" href="/api/export/codebook/csv"  download>CSV</a>
+        <a class="btn-sm" href="/api/export/markdown/codebook" download>MD</a>
+        <a class="btn-sm" href="/api/export/codetree/docx?as=kodbok" download>DOCX</a>
+        <a class="btn-sm" href="/api/export/codetree/odt?as=kodbok"  download>ODT</a>
       </div>
     </div>
     <div id="codebook-mgr-list"></div>
     <div class="dialog-actions">
       <button class="btn-primary" id="btn-cb-add" data-i18n="code.new.title">Ny kod</button>
+      <button class="btn-ghost"   id="btn-cb-merge">Slå ihop koder</button>
       <button class="btn-ghost"   id="btn-codebook-close" data-i18n="btn.close">Stäng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Merge codes modal -->
+<div id="modal-merge-codes" class="overlay hidden">
+  <div class="dialog">
+    <h2>Slå ihop koder</h2>
+    <p style="font-size:13px;color:var(--text-dim);margin-bottom:12px">Alla annotationer från källkoden flyttas till målkoden. Källkoden tas bort.</p>
+    <div class="export-field-group">
+      <label>Källkod (tas bort)</label>
+      <select id="merge-source"></select>
+    </div>
+    <div class="export-field-group">
+      <label>Målkod (behålls)</label>
+      <select id="merge-target"></select>
+    </div>
+    <div id="merge-status" style="font-size:13px;margin:8px 0"></div>
+    <div class="dialog-actions">
+      <button class="btn-primary" id="btn-merge-codes-confirm">Slå ihop</button>
+      <button class="btn-ghost" id="btn-merge-codes-cancel">Avbryt</button>
     </div>
   </div>
 </div>
@@ -793,9 +890,9 @@
     <div class="codetree-export-bar">
       <button class="btn-sm" id="btn-ct-png">PNG</button>
       <button class="btn-sm" id="btn-ct-pdf">PDF</button>
-      <a class="btn-sm" href="/api/export/markdown/codebook" download="kodbok.md">MD</a>
-      <a class="btn-sm" id="btn-ct-docx" href="/api/export/codetree/docx" download="kodtrad.docx">DOCX</a>
-      <a class="btn-sm" id="btn-ct-odt"  href="/api/export/codetree/odt"  download="kodtrad.odt">ODT</a>
+      <a class="btn-sm" href="/api/export/markdown/codebook" download>MD</a>
+      <a class="btn-sm" id="btn-ct-docx" href="/api/export/codetree/docx" download>DOCX</a>
+      <a class="btn-sm" id="btn-ct-odt"  href="/api/export/codetree/odt"  download>ODT</a>
     </div>
     <div id="codetree-content"></div>
     <div class="dialog-actions">
@@ -884,7 +981,7 @@
   <div class="dialog dialog-wide">
     <div class="cb-mgr-header">
       <h2 data-i18n="btn.code.matrix">Kodmatris</h2>
-      <a class="btn-sm" id="link-code-matrix-csv" href="/api/export/code-matrix/csv" download="kodmatris.csv">CSV</a>
+      <a class="btn-sm" id="link-code-matrix-csv" href="/api/export/code-matrix/csv" download>CSV</a>
     </div>
     <div id="code-matrix-wrap" class="matrix-scroll-wrap"></div>
     <div class="dialog-actions">
@@ -898,7 +995,7 @@
   <div class="dialog dialog-wide">
     <div class="cb-mgr-header">
       <h2 data-i18n="btn.cooccurrence">Kodöverlapp</h2>
-      <a class="btn-sm" id="link-cooccurrence-csv" href="/api/export/cooccurrence/csv" download="kodsamforekomst.csv">CSV</a>
+      <a class="btn-sm" id="link-cooccurrence-csv" href="/api/export/cooccurrence/csv" download>CSV</a>
     </div>
     <div id="cooccurrence-wrap" class="matrix-scroll-wrap"></div>
     <div class="dialog-actions">
@@ -921,5 +1018,6 @@
 <script src="/static/js/translations.js?v=18"></script>
 <script src="/static/js/wavesurfer.min.js"></script>
 <script src="/static/js/app.js?v=58"></script>
+<div id="toast-container"></div>
 </body>
 </html>

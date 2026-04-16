@@ -26,7 +26,7 @@ def compute_stats(folder: str, project: dict, tid: str = None) -> dict:
                     usage[cid] = {"count": 0, "coders": set(), "char_count": 0}
                 usage[cid]["count"] += 1
                 usage[cid]["coders"].add(coder)
-                usage[cid]["char_count"] += max(0, ann["end"] - ann["start"])
+                usage[cid]["char_count"] += max(0, ann.get("end", 0) - ann.get("start", 0))
 
     # Enrich with code metadata
     code_map = {c["id"]: c for c in project.get("codes", [])}

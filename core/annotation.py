@@ -115,6 +115,10 @@ def load_all_coders(folder: str, tid: str) -> dict:
     result = {}
     for f in ann_dir.glob(f"{tid}.*.json"):
         coder = f.stem[len(tid) + 1:]
+        # Skip sidecar files such as formatting (".fmt") — annotation coders
+        # are plain identifiers without dots.
+        if "." in coder:
+            continue
         with open(f, encoding="utf-8") as fh:
             data = json.load(fh)
         result[coder] = data.get("annotations", [])

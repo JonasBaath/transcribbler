@@ -142,6 +142,8 @@ def export_qdpx(folder: str, project: dict) -> bytes:
         for coder, anns in all_coders_data.items():
             coder_guid = coder_guids.get(coder, _fresh_guid())
             for ann in anns:
+                if ann.get("kind") == "point":
+                    continue  # skip image pins — no text positions for QDPX
                 code = code_map.get(ann["code_id"])
                 if not code:
                     continue  # skip annotations for deleted codes

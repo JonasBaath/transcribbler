@@ -8,32 +8,32 @@ const fs = require('fs');
 // Set app name (shown in macOS menu bar and dock)
 app.setName('Transcribbler');
 
-let flaskProcess = null;
-let mainWindow = null;
-let flaskPort = null;
-
-function findFreePort() {
-  return new Promise(resolve => {
-    const srv = net.createServer();
-    srv.listen(0, '127.0.0.1', () => {
-      const p = srv.address().port;
-      srv.close(() => resolve(p));
-    });
-  });
-}
+// Each window gets its own Flask backend; track them as { window, flask, port }.
+const instances = [];
 
 // Try a stable port first so localStorage (origin-bound) survives between runs.
 // Falls back to a random free port if the preferred port is occupied.
 const PREFERRED_PORT = 53917;
-function tryPort(port) {
-  return new Promise(resolve => {
+
+// Reserve a port atomically: hold the socket open until the caller releases it,
+// so no other process can grab the same port in between.
+function reservePort(preferred) {
+  return new Promise((resolve, reject) => {
     const srv = net.createServer();
-    srv.once('error', () => resolve(false));
-    srv.listen(port, '127.0.0.1', () => srv.close(() => resolve(true)));
+    srv.once('error', () => {
+      // preferred port busy — grab any free port instead
+      const srv2 = net.createServer();
+      srv2.once('error', reject);
+      srv2.listen(0, '127.0.0.1', () => {
+        const p = srv2.address().port;
+        resolve({ port: p, release: () => new Promise(r => srv2.close(r)) });
+      });
+    });
+    srv.listen(preferred, '127.0.0.1', () => {
+      const p = srv.address().port;
+      resolve({ port: p, release: () => new Promise(r => srv.close(r)) });
+    });
   });
-}
-async function pickPort() {
-  return (await tryPort(PREFERRED_PORT)) ? PREFERRED_PORT : await findFreePort();
 }
 
 function getAppDir() {
@@ -66,14 +66,15 @@ function startFlask(port) {
   const appDir = getAppDir();
   const py = findPython(appDir);
 
-  flaskProcess = spawn(py, [path.join(appDir, 'main.py'), '--no-browser'], {
+  const proc = spawn(py, [path.join(appDir, 'main.py'), '--no-browser'], {
     cwd: appDir,
     env: { ...process.env, PORT: String(port) },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
-  flaskProcess.stdout.on('data', d => process.stdout.write('[flask] ' + d));
-  flaskProcess.stderr.on('data', d => process.stderr.write('[flask] ' + d));
+  proc.stdout.on('data', d => process.stdout.write(`[flask:${port}] ` + d));
+  proc.stderr.on('data', d => process.stderr.write(`[flask:${port}] ` + d));
+  return proc;
 }
 
 function waitForFlask(port, timeout = 60000) {
@@ -129,8 +130,9 @@ function buildMenu(lang = 'sv') {
   const L = menuLabels[lang] || menuLabels.sv;
 
   function clickButton(id) {
-    if (mainWindow) {
-      mainWindow.webContents.send('menu-click', id);
+    const focused = BrowserWindow.getFocusedWindow();
+    if (focused) {
+      focused.webContents.send('menu-click', id);
     }
   }
 
@@ -225,7 +227,7 @@ ipcMain.on('set-menu-lang', (_event, lang) => {
 function createWindow(port) {
   const isMac = process.platform === 'darwin';
 
-  mainWindow = new BrowserWindow({
+  const win = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 900,
@@ -241,37 +243,100 @@ function createWindow(port) {
     },
   });
 
-  mainWindow.loadURL(`http://127.0.0.1:${port}`);
+  win.loadURL(`http://127.0.0.1:${port}`);
 
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+  win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: 'deny' };
   });
 
-  mainWindow.on('closed', () => {
-    mainWindow = null;
-  });
+  return win;
 }
 
+// IPC: Double-click titlebar to maximize/restore (macOS hiddenInset workaround)
+ipcMain.on('titlebar-double-click', (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (!win) return;
+  if (win.isMaximized()) {
+    win.unmaximize();
+  } else {
+    win.maximize();
+  }
+});
+
 // IPC: Electron-native folder picker
-ipcMain.handle('pick-folder', async () => {
-  const result = await dialog.showOpenDialog(mainWindow, {
+ipcMain.handle('pick-folder', async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const result = await dialog.showOpenDialog(win, {
     properties: ['openDirectory'],
     title: 'Välj projektmapp',
   });
   return result.canceled ? '' : result.filePaths[0];
 });
 
-function killFlask() {
-  if (!flaskProcess) return;
-  const pid = flaskProcess.pid;
-  flaskProcess = null;
+function killFlaskProcess(proc) {
+  if (!proc) return;
+  const pid = proc.pid;
   if (process.platform === 'win32') {
-    // Kill entire process tree on Windows (Python may spawn child workers)
     require('child_process').spawn('taskkill', ['/F', '/T', '/PID', String(pid)], { stdio: 'ignore' });
   } else {
     try { process.kill(pid, 'SIGTERM'); } catch (_) {}
   }
+}
+
+function killAllFlask() {
+  for (const inst of instances) {
+    killFlaskProcess(inst.flask);
+    inst.flask = null;
+  }
+}
+
+// Spin up a new Flask backend + window and track the pair.
+async function launchInstance() {
+  const preferred = instances.length === 0 ? PREFERRED_PORT : 0;
+  const { port, release } = await reservePort(preferred);
+  // Release the held socket so Flask can bind to the same port immediately.
+  await release();
+  const flask = startFlask(port);
+
+  try {
+    await waitForFlask(port);
+  } catch {
+    dialog.showErrorBox(
+      'Transcribbler',
+      'Kunde inte starta Flask-servern.\nKontrollera att Python och beroenden är installerade.'
+    );
+    killFlaskProcess(flask);
+    if (instances.length === 0) app.quit();
+    return;
+  }
+
+  const win = createWindow(port);
+  const inst = { window: win, flask, port };
+  instances.push(inst);
+
+  win.on('closed', () => {
+    killFlaskProcess(inst.flask);
+    inst.flask = null;
+    const idx = instances.indexOf(inst);
+    if (idx !== -1) instances.splice(idx, 1);
+    // Quit when the last window is closed (on all platforms).
+    if (instances.length === 0) app.quit();
+  });
+}
+
+// Allow a second launch of the same app to open a new parallel window.
+// requestSingleInstanceLock makes the OS route the second launch to this
+// process (via the 'second-instance' event) instead of starting a new one.
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  // Another instance is already primary — it will handle the event. Quit this one.
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    // A second launch was attempted — open a new independent window + backend.
+    launchInstance();
+  });
 }
 
 app.whenReady().then(async () => {
@@ -281,31 +346,14 @@ app.whenReady().then(async () => {
       try { app.dock.setIcon(iconPath); } catch (e) { console.warn('dock.setIcon failed:', e.message); }
     }
   }
-  flaskPort = await pickPort();
-  startFlask(flaskPort);
-
-  try {
-    await waitForFlask(flaskPort);
-  } catch {
-    dialog.showErrorBox(
-      'Transcribbler',
-      'Kunde inte starta Flask-servern.\nKontrollera att Python och beroenden är installerade.'
-    );
-    app.quit();
-    return;
-  }
 
   buildMenu();
-  createWindow(flaskPort);
+  await launchInstance();
 
   app.on('activate', () => {
-    if (!mainWindow) createWindow(flaskPort);
+    // macOS: re-open a window when dock icon is clicked and no windows exist.
+    if (instances.length === 0) launchInstance();
   });
 });
 
-app.on('window-all-closed', () => {
-  killFlask();
-  app.quit();
-});
-
-app.on('before-quit', killFlask);
+app.on('before-quit', killAllFlask);

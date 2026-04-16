@@ -14,7 +14,7 @@ import webbrowser
 from pathlib import Path
 
 from flask import (Flask, jsonify, render_template, request,
-                   send_from_directory)
+                   send_from_directory, Response)
 
 from core import project as proj_mod
 from core import codebook as cb_mod
@@ -1410,6 +1410,33 @@ def rename_transcript(tid):
     return jsonify({"ok": True, "name": new_name})
 
 
+@app.route("/api/transcripts/reorder", methods=["PATCH"])
+def reorder_transcripts():
+    err = _require_project()
+    if err:
+        return err
+    data = request.json or {}
+    ordered_ids = data.get("order")
+    if not ordered_ids or not isinstance(ordered_ids, list):
+        return jsonify({"error": "Missing 'order' list."}), 400
+    transcripts = STATE["project"]["transcripts"]
+    by_id = {t["id"]: t for t in transcripts}
+    # Build the reordered list: first the IDs in the given order,
+    # then any remaining transcripts not mentioned (safety net).
+    reordered = []
+    seen = set()
+    for tid in ordered_ids:
+        if tid in by_id and tid not in seen:
+            reordered.append(by_id[tid])
+            seen.add(tid)
+    for t in transcripts:
+        if t["id"] not in seen:
+            reordered.append(t)
+    STATE["project"]["transcripts"] = reordered
+    proj_mod.save_project(STATE["folder"], STATE["project"])
+    return jsonify({"ok": True, "project": STATE["project"]})
+
+
 @app.route("/api/transcripts/categorize", methods=["PATCH"])
 def categorize_transcripts():
     err = _require_project()
@@ -1537,8 +1564,51 @@ def delete_code(code_id):
     if err:
         return err
     STATE["project"] = cb_mod.delete_code(STATE["project"], code_id)
+    # Remove annotations that referenced the deleted code (all coders).
+    ann_dir = Path(STATE["folder"]) / "annotations"
+    if ann_dir.exists():
+        import json as _json
+        for f in ann_dir.glob("*.json"):
+            # Skip sidecar files (e.g. formatting)
+            if f.stem.count(".") != 1:
+                continue
+            try:
+                with open(f, encoding="utf-8") as fh:
+                    data = _json.load(fh)
+                anns = data.get("annotations", [])
+                kept = [a for a in anns if a.get("code_id") != code_id]
+                if len(kept) != len(anns):
+                    data["annotations"] = kept
+                    with open(f, "w", encoding="utf-8") as fh:
+                        _json.dump(data, fh, ensure_ascii=False, indent=2)
+            except Exception:
+                logger.exception("delete_code cleanup failed for %s", f)
     proj_mod.save_project(STATE["folder"], STATE["project"])
     return jsonify({"ok": True, "project": STATE["project"]})
+
+
+@app.route("/api/codes/merge", methods=["POST"])
+def merge_codes_route():
+    err = _require_project()
+    if err:
+        return err
+    data = request.json
+    source_id = data.get("source_id")
+    target_id = data.get("target_id")
+    if not source_id or not target_id:
+        return jsonify({"error": "source_id and target_id required"}), 400
+    if source_id == target_id:
+        return jsonify({"error": "Cannot merge a code into itself"}), 400
+    try:
+        STATE["project"] = cb_mod.merge_codes(
+            STATE["project"], STATE["folder"], source_id, target_id)
+        proj_mod.save_project(STATE["folder"], STATE["project"])
+        return jsonify({"ok": True, "project": STATE["project"]})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception:
+        logger.exception("merge_codes failed")
+        return jsonify({"error": "Kunde inte slå ihop koderna."}), 500
 
 
 # ---------------------------------------------------------------------------
@@ -1662,16 +1732,16 @@ def get_conflicts(tid):
 # ---------------------------------------------------------------------------
 
 def _export_filename(stem: str, ext: str) -> str:
-    """Build a safe filename: <stem>_<project>_<date>.<ext>"""
-    from datetime import date
+    """Build a safe filename: <stem>_<project>_<datetime>.<ext>"""
+    from datetime import datetime as _dt
     import re
     proj_name = STATE.get("project", {}).get("name", "") if STATE.get("project") else ""
     safe = re.sub(r"[^\w\-]+", "_", proj_name).strip("_") if proj_name else ""
-    date_str = date.today().strftime("%Y-%m-%d")
+    dt_str = _dt.now().strftime("%Y-%m-%d_%H%M")
     parts = [stem]
     if safe:
         parts.append(safe)
-    parts.append(date_str)
+    parts.append(dt_str)
     return "_".join(parts) + "." + ext
 
 
@@ -1707,7 +1777,7 @@ def export_md_codes():
     tid = request.args.get("tid") or None
     md = exp_mod.export_markdown_by_code(STATE["folder"], STATE["project"], tid)
     return app.response_class(md, mimetype="text/markdown",
-                              headers={"Content-Disposition": "attachment; filename=citat_per_kod.md"})
+                              headers={"Content-Disposition": f'attachment; filename="{_export_filename("citat_per_kod", "md")}"'})
 
 
 @app.route("/api/export/markdown/codebook", methods=["GET"])
@@ -1715,9 +1785,16 @@ def export_md_codebook():
     err = _require_project()
     if err:
         return err
-    md = exp_mod.export_markdown_codebook(STATE["project"])
+    from core.stats import compute_stats
+    try:
+        result = compute_stats(STATE["folder"], STATE["project"])
+        counts = {r["code_id"]: r["count"] for r in result["rows"]}
+    except Exception:
+        logger.exception("compute_stats failed in md codebook export")
+        counts = {}
+    md = exp_mod.export_markdown_codebook(STATE["project"], counts)
     return app.response_class(md, mimetype="text/markdown",
-                              headers={"Content-Disposition": "attachment; filename=kodbok.md"})
+                              headers={"Content-Disposition": f'attachment; filename="{_export_filename("kodbok", "md")}"'})
 
 
 @app.route("/api/codes/stats", methods=["GET"])
@@ -1737,11 +1814,15 @@ def export_codebook_csv():
     if err:
         return err
     from core.stats import compute_stats
-    result = compute_stats(STATE["folder"], STATE["project"])
-    counts = {r["code_id"]: r["count"] for r in result["rows"]}
+    try:
+        result = compute_stats(STATE["folder"], STATE["project"])
+        counts = {r["code_id"]: r["count"] for r in result["rows"]}
+    except Exception:
+        logger.exception("compute_stats failed in codebook CSV export")
+        counts = {}
     csv_data = exp_mod.export_codebook_csv(STATE["project"], counts)
     return app.response_class(
-        csv_data,
+        csv_data.encode("utf-8-sig"),
         mimetype="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{_export_filename("kodbok", "csv")}"'},
     )
@@ -1755,7 +1836,7 @@ def export_md_transcript(tid):
     coder = request.args.get("coder", STATE["coder"])
     md = exp_mod.export_markdown_transcript(STATE["folder"], STATE["project"], tid, coder)
     return app.response_class(md, mimetype="text/markdown",
-                              headers={"Content-Disposition": f"attachment; filename=transkript_{tid}.md"})
+                              headers={"Content-Disposition": f'attachment; filename="{_export_filename(f"transkript_{tid}", "md")}"'})
 
 
 # ---------------------------------------------------------------------------
@@ -1843,11 +1924,10 @@ def export_qdpx():
         return err
     from core.qdpx import export_qdpx as _export_qdpx
     zip_bytes = _export_qdpx(STATE["folder"], STATE["project"])
-    proj_name = STATE["project"].get("name", "projekt").replace(" ", "_")
     return app.response_class(
         zip_bytes,
         mimetype="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{proj_name}.qdpx"'},
+        headers={"Content-Disposition": f'attachment; filename="{_export_filename("projekt", "qdpx")}"'},
     )
 
 
@@ -1900,6 +1980,11 @@ def get_formatting(tid):
         return err
     from core.formatting import load_formatting
     spans = load_formatting(STATE["folder"], tid, STATE["coder"])
+    imported = load_formatting(STATE["folder"], tid, "__import__")
+    seen = {s["id"] for s in spans}
+    for s in imported:
+        if s["id"] not in seen:
+            spans.append(s)
     return jsonify({"spans": spans})
 
 
@@ -1932,6 +2017,68 @@ def delete_formatting(tid, span_id):
 
 
 # ---------------------------------------------------------------------------
+# Analysis view routes
+# ---------------------------------------------------------------------------
+
+@app.route("/api/analysis/excerpts", methods=["GET"])
+def get_analysis_excerpts():
+    err = _require_project()
+    if err:
+        return err
+    from core.analysis import gather_excerpts
+    return jsonify(gather_excerpts(STATE["folder"], STATE["project"]))
+
+
+@app.route("/api/analysis/export", methods=["POST"])
+def export_analysis():
+    err = _require_project()
+    if err:
+        return err
+    from core.analysis import gather_excerpts
+    from core import analysis_export as aexp
+
+    data = request.json or {}
+    fmt = data.get("format", "md")
+    mode = data.get("mode", "separate")
+    code_ids = data.get("code_ids")
+    excerpt_ids = data.get("excerpt_ids")
+    anchor_only = data.get("anchor_only", False)
+
+    result = gather_excerpts(STATE["folder"], STATE["project"])
+    excerpts = result["excerpts"]
+
+    if code_ids:
+        code_set = set(code_ids)
+        excerpts = [e for e in excerpts if e["code_id"] in code_set]
+    if excerpt_ids:
+        id_set = set(excerpt_ids)
+        excerpts = [e for e in excerpts if e["id"] in id_set]
+    if anchor_only:
+        excerpts = [e for e in excerpts if e.get("anchor")]
+
+    pname = STATE["project"].get("name", "analys")
+
+    if fmt == "md":
+        content = aexp.export_analysis_md(STATE["project"], excerpts, mode)
+        return Response(content, mimetype="text/markdown",
+                        headers={"Content-Disposition": f"attachment; filename={pname}_analys.md"})
+    elif fmt == "csv":
+        content = aexp.export_analysis_csv(STATE["project"], excerpts, mode)
+        return Response(content, mimetype="text/csv",
+                        headers={"Content-Disposition": f"attachment; filename={pname}_analys.csv"})
+    elif fmt == "docx":
+        content = aexp.export_analysis_docx(STATE["project"], excerpts, mode)
+        return Response(content, mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        headers={"Content-Disposition": f"attachment; filename={pname}_analys.docx"})
+    elif fmt == "odt":
+        content = aexp.export_analysis_odt(STATE["project"], excerpts, mode)
+        return Response(content, mimetype="application/vnd.oasis.opendocument.text",
+                        headers={"Content-Disposition": f"attachment; filename={pname}_analys.odt"})
+    else:
+        return jsonify({"error": f"Unknown format: {fmt}"}), 400
+
+
+# ---------------------------------------------------------------------------
 # Code tree export routes
 # ---------------------------------------------------------------------------
 
@@ -1942,9 +2089,10 @@ def export_codetree_docx():
         return err
     from core.export import export_codetree_docx as _docx
     data = _docx(STATE["project"])
+    stem = "kodbok" if request.args.get("as") == "kodbok" else "kodtrad"
     return app.response_class(
         data, mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": "attachment; filename=kodtrad.docx"})
+        headers={"Content-Disposition": f'attachment; filename="{_export_filename(stem, "docx")}"'})
 
 
 @app.route("/api/export/codetree/odt", methods=["GET"])
@@ -1954,9 +2102,10 @@ def export_codetree_odt():
         return err
     from core.export import export_codetree_odt as _odt
     data = _odt(STATE["project"])
+    stem = "kodbok" if request.args.get("as") == "kodbok" else "kodtrad"
     return app.response_class(
         data, mimetype="application/vnd.oasis.opendocument.text",
-        headers={"Content-Disposition": "attachment; filename=kodtrad.odt"})
+        headers={"Content-Disposition": f'attachment; filename="{_export_filename(stem, "odt")}"'})
 
 
 @app.route("/api/export/to-folder", methods=["POST"])
@@ -1980,44 +2129,78 @@ def export_to_folder():
         return jsonify({"error": "Kunde inte skapa exportmappen."}), 400
 
     written = []
+    errors = []
 
     if "csv_tidy" in formats:
-        csv_data = exp_mod.export_csv_tidy(STATE["folder"], STATE["project"], tid)
-        fname = _export_filename("annoteringar_tidy", "csv")
-        (dest / fname).write_text(csv_data, encoding="utf-8")
-        written.append(fname)
+        try:
+            csv_data = exp_mod.export_csv_tidy(STATE["folder"], STATE["project"], tid)
+            fname = _export_filename("annoteringar_tidy", "csv")
+            (dest / fname).write_text(csv_data, encoding="utf-8")
+            written.append(fname)
+        except Exception:
+            logger.exception("export csv_tidy failed")
+            errors.append("csv_tidy")
 
     if "csv" in formats:
-        csv_data = exp_mod.export_csv(STATE["folder"], STATE["project"], tid)
-        (dest / "export.csv").write_text(csv_data, encoding="utf-8")
-        written.append("export.csv")
+        try:
+            csv_data = exp_mod.export_csv(STATE["folder"], STATE["project"], tid)
+            fname = _export_filename("annoteringar", "csv")
+            (dest / fname).write_text(csv_data, encoding="utf-8")
+            written.append(fname)
+        except Exception:
+            logger.exception("export csv failed")
+            errors.append("csv")
 
     if "md_codes" in formats:
-        md = exp_mod.export_markdown_by_code(STATE["folder"], STATE["project"], tid)
-        (dest / "citat_per_kod.md").write_text(md, encoding="utf-8")
-        written.append("citat_per_kod.md")
+        try:
+            md = exp_mod.export_markdown_by_code(STATE["folder"], STATE["project"], tid)
+            fname = _export_filename("citat_per_kod", "md")
+            (dest / fname).write_text(md, encoding="utf-8")
+            written.append(fname)
+        except Exception:
+            logger.exception("export md_codes failed")
+            errors.append("md_codes")
 
     if "md_codebook" in formats:
-        md = exp_mod.export_markdown_codebook(STATE["project"])
-        (dest / "kodbok.md").write_text(md, encoding="utf-8")
-        written.append("kodbok.md")
+        try:
+            from core.stats import compute_stats as _cs
+            try:
+                _r = _cs(STATE["folder"], STATE["project"])
+                _cb_counts = {r["code_id"]: r["count"] for r in _r["rows"]}
+            except Exception:
+                _cb_counts = {}
+            md = exp_mod.export_markdown_codebook(STATE["project"], _cb_counts)
+            fname = _export_filename("kodbok", "md")
+            (dest / fname).write_text(md, encoding="utf-8")
+            written.append(fname)
+        except Exception:
+            logger.exception("export md_codebook failed")
+            errors.append("md_codebook")
 
     if "md_transcript" in formats:
         if not tid:
             return jsonify({"error": "Inget transkript öppet för detta exportformat."}), 400
-        coder = STATE["coder"]
-        md = exp_mod.export_markdown_transcript(STATE["folder"], STATE["project"], tid, coder)
-        (dest / f"transkript_{tid}.md").write_text(md, encoding="utf-8")
-        written.append(f"transkript_{tid}.md")
+        try:
+            coder = STATE["coder"]
+            md = exp_mod.export_markdown_transcript(STATE["folder"], STATE["project"], tid, coder)
+            fname = _export_filename(f"transkript_{tid}", "md")
+            (dest / fname).write_text(md, encoding="utf-8")
+            written.append(fname)
+        except Exception:
+            logger.exception("export md_transcript failed")
+            errors.append("md_transcript")
 
     if "qdpx" in formats:
-        from core.qdpx import export_qdpx as _export_qdpx
-        proj_name = STATE["project"].get("name", "projekt").replace(" ", "_")
-        fname = f"{proj_name}.qdpx"
-        (dest / fname).write_bytes(_export_qdpx(STATE["folder"], STATE["project"]))
-        written.append(fname)
+        try:
+            from core.qdpx import export_qdpx as _export_qdpx
+            fname = _export_filename("projekt", "qdpx")
+            (dest / fname).write_bytes(_export_qdpx(STATE["folder"], STATE["project"]))
+            written.append(fname)
+        except Exception:
+            logger.exception("export qdpx failed")
+            errors.append("qdpx")
 
-    return jsonify({"ok": True, "written": written, "folder": dest_str})
+    return jsonify({"ok": True, "written": written, "errors": errors, "folder": dest_str})
 
 
 # ---------------------------------------------------------------------------

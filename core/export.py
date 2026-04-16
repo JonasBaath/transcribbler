@@ -33,13 +33,16 @@ def export_csv(folder: str, project: dict, tid=None) -> str:
         all_coders = load_all_coders(folder, t["id"])
         for coder, anns in all_coders.items():
             for ann in anns:
+                if ann.get("kind") == "point":
+                    continue  # skip image pins — no text positions
                 code = get_code(project, ann["code_id"])
                 code_name = code["name"] if code else ann["code_id"]
                 # Build breadcrumb path
                 path = _code_path(project, ann["code_id"])
                 writer.writerow([
                     t["name"], coder, code_name, path,
-                    ann["start"], ann["end"], ann["text"],
+                    ann.get("start", 0), ann.get("end", 0),
+                    ann.get("text", ""),
                     ann.get("memo", ""), ann.get("created", ""),
                 ])
     return output.getvalue()
@@ -115,11 +118,15 @@ def export_csv_tidy(folder: str, project: dict, tid=None) -> str:
         cat = t.get("category", "")
         for coder, anns in all_coders.items():
             for ann in anns:
+                if ann.get("kind") == "point":
+                    continue  # skip image pins — no text positions
                 code = by_id.get(ann["code_id"])
                 code_name   = code["name"] if code else ann["code_id"]
                 parent_name = by_id.get(code["parent"], {}).get("name", "") if code and code.get("parent") else ""
                 path        = _code_path(project, ann["code_id"])
                 color       = code.get("color", "") if code else ""
+                start = ann.get("start", 0)
+                end   = ann.get("end", 0)
                 writer.writerow([
                     proj_name,
                     t["name"],
@@ -129,10 +136,10 @@ def export_csv_tidy(folder: str, project: dict, tid=None) -> str:
                     parent_name,
                     path,
                     color,
-                    ann["start"],
-                    ann["end"],
-                    ann["end"] - ann["start"],
-                    ann["text"],
+                    start,
+                    end,
+                    end - start,
+                    ann.get("text", ""),
                     ann.get("memo", ""),
                     ann.get("weight", ""),
                     "TRUE" if ann.get("anchor") else "FALSE",
@@ -185,11 +192,16 @@ def _assign_numbers_py(nodes: list, prefix: str):
         _assign_numbers_py(node.get("children", []), number)
 
 
-def export_markdown_codebook(project: dict) -> str:
+def export_markdown_codebook(project: dict, counts: dict | None = None) -> str:
     """Export the codebook as a Markdown document."""
+    if counts is None:
+        counts = {}
     lines = [f"# Kodbok — {project['name']}\n"]
     tree = build_tree(project)
-    _render_codebook_tree(tree, lines, level=2)
+    numbered = bool(project.get("numbering"))
+    if numbered:
+        _assign_numbers_py(tree, "")
+    _render_codebook_tree(tree, lines, level=2, numbered=numbered, counts=counts)
     if not tree:
         lines.append("_Kodboken är tom._\n")
     return "\n".join(lines)
@@ -264,13 +276,20 @@ def _render_tree_md(nodes: list, by_code: dict, lines: list, level: int):
             _render_tree_md(node["children"], by_code, lines, level + 1)
 
 
-def _render_codebook_tree(nodes: list, lines: list, level: int):
+def _render_codebook_tree(nodes: list, lines: list, level: int,
+                          numbered: bool = False, counts: dict | None = None):
+    if counts is None:
+        counts = {}
     for node in nodes:
         hashes = "#" * level
-        lines.append(f"{hashes} {node['name']}\n")
+        num = f"{node['_number']}. " if numbered and node.get("_number") else ""
+        cnt = counts.get(node["id"], 0)
+        cnt_str = f" ({cnt})" if counts else ""
+        lines.append(f"{hashes} {num}{node['name']}{cnt_str}\n")
         if node.get("description"):
             lines.append(f"{node['description']}\n")
-        _render_codebook_tree(node["children"], lines, level + 1)
+        _render_codebook_tree(node["children"], lines, level + 1,
+                              numbered=numbered, counts=counts)
 
 
 # ---------------------------------------------------------------------------
@@ -287,6 +306,9 @@ def export_codetree_docx(project: dict) -> bytes:
     import io
 
     tree = build_tree(project)
+    numbered = bool(project.get("numbering"))
+    if numbered:
+        _assign_numbers_py(tree, "")
     doc = Document()
     doc.add_heading(f"Kodbok — {project['name']}", 0)
 
@@ -301,7 +323,8 @@ def export_codetree_docx(project: dict) -> bytes:
             p = doc.add_paragraph()
             p.paragraph_format.left_indent = Pt(depth * 18)
             bullet = "■ " if depth == 0 else "▸ "
-            run = p.add_run("  " * depth + bullet + node["name"])
+            num = f"{node['_number']}. " if numbered and node.get("_number") else ""
+            run = p.add_run("  " * depth + bullet + num + node["name"])
             run.bold = (depth == 0)
             run.font.size = Pt(max(9, 13 - depth))
             try:
@@ -333,6 +356,9 @@ def export_codetree_odt(project: dict) -> bytes:
     import io
 
     tree = build_tree(project)
+    numbered = bool(project.get("numbering"))
+    if numbered:
+        _assign_numbers_py(tree, "")
     doc = OpenDocumentText()
 
     title_el = H(outlinelevel=1)
@@ -341,13 +367,14 @@ def export_codetree_odt(project: dict) -> bytes:
 
     def _walk(nodes, depth):
         for node in nodes:
+            num = f"{node['_number']}. " if numbered and node.get("_number") else ""
             if depth == 0:
                 h = H(outlinelevel=2)
-                h.addText(node["name"])
+                h.addText(num + node["name"])
                 doc.text.addElement(h)
             else:
                 p = P()
-                p.addText("  " * depth + "• " + node["name"])
+                p.addText("  " * depth + "• " + num + node["name"])
                 doc.text.addElement(p)
             if node.get("description"):
                 dp = P()
