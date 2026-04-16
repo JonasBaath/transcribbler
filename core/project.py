@@ -43,6 +43,8 @@ def create_project(folder: str, name: str, coder: str) -> dict:
         "codes": [],
         "transcripts": [],
         "speakers": [],   # voice profiles (future feature)
+        "numbering": True,
+        "trans_order": True,
     }
     _save(folder, project)
     return project
@@ -52,7 +54,13 @@ def open_project(folder: str) -> dict:
     """Load and return an existing project dict."""
     path = Path(folder) / PROJECT_FILE
     with open(path, encoding="utf-8") as f:
-        return json.load(f)
+        project = json.load(f)
+    # Back-fill defaults for older projects missing these flags.
+    if "numbering" not in project:
+        project["numbering"] = True
+    if "trans_order" not in project:
+        project["trans_order"] = True
+    return project
 
 
 def save_project(folder: str, project: dict):
@@ -96,10 +104,21 @@ def add_transcript(folder: str, project: dict, src_path: str, name: str = "") ->
     # For .md files: extract frontmatter metadata (title, category) before text extraction
     fm = _parse_md_frontmatter(src) if ext == ".md" else {}
 
-    text = _extract_text(src)
+    text, fmt_spans = _extract_text_with_formatting(src)
     # Save plain-text version alongside original
     txt_path = Path(folder) / TRANSCRIPTS_DIR / f"{tid}.txt"
     txt_path.write_text(text, encoding="utf-8")
+
+    # Save formatting spans (bold/italic) if any were found in the document
+    if fmt_spans:
+        from core.formatting import save_formatting
+        import uuid as _uuid
+        enriched = []
+        for s in fmt_spans:
+            s["id"] = str(_uuid.uuid4())[:8]
+            s["created"] = _now()
+            enriched.append(s)
+        save_formatting(folder, tid, "__import__", enriched)
 
     entry = {
         "id": tid,
@@ -270,29 +289,115 @@ def _parse_md_frontmatter(path: Path) -> dict:
 
 
 def _extract_text(path: Path) -> str:
+    text, _ = _extract_text_with_formatting(path)
+    return text
+
+
+def _extract_text_with_formatting(path: Path) -> tuple:
+    """Return (plain_text, formatting_spans) where spans are [{start, end, type}]."""
     ext = path.suffix.lower()
     if ext == ".docx":
-        doc = docx.Document(str(path))
-        return "\n".join(p.text for p in doc.paragraphs)
+        return _extract_docx_with_formatting(path)
     elif ext == ".odt":
-        from odf import text as odftext, teletype
-        from odf.opendocument import load as odf_load
-        doc = odf_load(str(path))
-        paragraphs = doc.spreadsheet if hasattr(doc, "spreadsheet") else []
-        paras = doc.text.getElementsByType(odftext.P)
-        return "\n".join(teletype.extractText(p) for p in paras)
+        return _extract_odt_with_formatting(path)
     elif ext == ".md":
         import re
         raw = path.read_text(encoding="utf-8", errors="replace")
-        # Strip YAML frontmatter block
         raw = re.sub(r"\A---\n.*?\n---\n?", "", raw, count=1, flags=re.DOTALL)
-        # Strip Markdown syntax, return plain text
         raw = re.sub(r"^#{1,6}\s+", "", raw, flags=re.MULTILINE)
         raw = re.sub(r"\*{1,2}(.+?)\*{1,2}", r"\1", raw)
         raw = re.sub(r"_{1,2}(.+?)_{1,2}", r"\1", raw)
         raw = re.sub(r"`{1,3}[^`]*`{1,3}", "", raw)
         raw = re.sub(r"!\[.*?\]\(.*?\)", "", raw)
         raw = re.sub(r"\[(.+?)\]\(.*?\)", r"\1", raw)
-        return raw
+        return raw, []
     else:
-        return path.read_text(encoding="utf-8", errors="replace")
+        return _read_text_autodetect(path), []
+
+
+def _extract_docx_with_formatting(path: Path) -> tuple:
+    """Extract text and bold/italic spans from a .docx file."""
+    doc = docx.Document(str(path))
+    lines = []
+    spans = []
+    offset = 0
+    for para in doc.paragraphs:
+        for run in para.runs:
+            text = run.text
+            if not text:
+                continue
+            start = offset
+            end = offset + len(text)
+            if run.bold:
+                spans.append({"start": start, "end": end, "type": "bold"})
+            if run.italic:
+                spans.append({"start": start, "end": end, "type": "italic"})
+            offset = end
+        lines.append(offset)
+        offset += 1  # newline
+    plain = "\n".join(p.text for p in doc.paragraphs)
+    return plain, spans
+
+
+def _extract_odt_with_formatting(path: Path) -> tuple:
+    """Extract text and bold/italic spans from an .odt file."""
+    from odf import text as odftext, teletype
+    from odf.opendocument import load as odf_load
+    from odf.style import TextProperties
+    FO_NS = "urn:oasis:names:tc:opendocument:xmlns:xsl-fo-compatible:1.0"
+    doc = odf_load(str(path))
+    paras = doc.text.getElementsByType(odftext.P)
+    styles = {}
+    for s in doc.automaticstyles.childNodes:
+        name = s.getAttribute("name")
+        if name:
+            tp = s.getElementsByType(TextProperties)
+            if tp:
+                props = tp[0]
+                fw = props.getAttrNS(FO_NS, "font-weight") or ""
+                fs = props.getAttrNS(FO_NS, "font-style") or ""
+                styles[name] = {
+                    "bold": fw == "bold",
+                    "italic": fs == "italic",
+                }
+    plain_parts = []
+    spans = []
+    offset = 0
+    for para in paras:
+        para_text = teletype.extractText(para)
+        child_offset = offset
+        for child in para.childNodes:
+            qname = getattr(child, "qname", None)
+            if qname is None:
+                child_text = str(child)
+            else:
+                child_text = teletype.extractText(child)
+            if not child_text:
+                continue
+            start = child_offset
+            end = child_offset + len(child_text)
+            if qname and qname[1] == "span":
+                style_name = child.getAttribute("stylename")
+                if style_name and style_name in styles:
+                    s = styles[style_name]
+                    if s.get("bold"):
+                        spans.append({"start": start, "end": end, "type": "bold"})
+                    if s.get("italic"):
+                        spans.append({"start": start, "end": end, "type": "italic"})
+            child_offset = end
+        plain_parts.append(para_text)
+        offset += len(para_text) + 1
+    return "\n".join(plain_parts), spans
+
+
+def _read_text_autodetect(path: Path) -> str:
+    """Read a plain-text file, detecting the encoding when possible."""
+    raw = path.read_bytes()
+    try:
+        from charset_normalizer import from_bytes
+        best = from_bytes(raw).best()
+        if best is not None:
+            return str(best)
+    except Exception:
+        pass
+    return raw.decode("utf-8", errors="replace")
