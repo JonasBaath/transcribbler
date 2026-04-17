@@ -58,3 +58,4 @@ jobs:
           files: ${{ matrix.artifact }}
           fail_on_unmatched_files: true
           generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
