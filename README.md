@@ -6,8 +6,8 @@
 
 A local desktop app for qualitative transcript coding. Import transcripts (text, audio, or image), build a hierarchical codebook, and code text passages — entirely offline, no cloud services required.
 
-> [!WARNING]
-> **Only the arm64 (Apple Silicon) build is verified to work.** The Windows (`.exe`) and Linux (`.AppImage`) binaries published via GitHub Releases are experimental and untested — use at your own risk, and please file issues for anything you encounter.
+> [!NOTE]
+> **Beta.** Installation and launch verified on macOS (arm64 + Intel), Windows 10/11, and Linux (AppImage). Functional testing beyond startup is still light — please file issues for anything that breaks.
 
 ![Transcribbler screenshot](docs/screenshot.png)
 
