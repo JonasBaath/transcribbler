@@ -20,6 +20,7 @@
     "prebuild:linux": "bash prepare-runtime.sh",
     "prebuild": "bash prepare-runtime.sh",
     "build:mac": "electron-builder --mac",
+    "build:mac-intel": "PBS_ARCH=x86_64 bash prepare-runtime.sh && electron-builder --mac --x64",
     "build:win": "electron-builder --win",
     "build:linux": "electron-builder --linux",
     "build": "electron-builder -mwl"
@@ -48,7 +49,18 @@
     "mac": {
       "category": "public.app-category.productivity",
       "icon": "assets/icon.icns",
-      "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }]
+      "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }],
+      "signIgnore": [
+        "/python-runtime/.*\\.pyc$",
+        "/python-runtime/.*/__pycache__/",
+        "/python-runtime/.*\\.py$",
+        "/python-runtime/.*\\.txt$",
+        "/python-runtime/.*\\.md$",
+        "/python-runtime/.*\\.json$",
+        "/python-runtime/.*\\.html$",
+        "/python-runtime/.*\\.css$",
+        "/python-runtime/.*\\.js$"
+      ]
     },
     "win": {
       "icon": "assets/icon.ico",

@@ -14,12 +14,12 @@ PBS_PY_VERSION="3.11.11"
 
 detect_pbs_triple() {
   local arch
-  arch="$(uname -m)"
+  arch="${PBS_ARCH:-$(uname -m)}"
   case "$OSTYPE" in
     darwin*)
       case "$arch" in
         arm64|aarch64) echo "aarch64-apple-darwin" ;;
-        x86_64)        echo "x86_64-apple-darwin" ;;
+        x86_64|x64)    echo "x86_64-apple-darwin" ;;
         *) echo "unsupported-darwin-arch:$arch" >&2; return 1 ;;
       esac
       ;;
@@ -57,6 +57,11 @@ download_runtime() {
   mv python "$RUNTIME_DIR"
   rm -f "$tarball"
 }
+
+if [[ -n "${PBS_ARCH:-}" && -d "$RUNTIME_DIR" ]]; then
+  echo "PBS_ARCH=$PBS_ARCH satt — tvingar omnedladdning för korrekt arkitektur."
+  rm -rf "$RUNTIME_DIR"
+fi
 
 if [[ ! -x "$RUNTIME_DIR/bin/python" && ! -x "$RUNTIME_DIR/python.exe" ]]; then
   echo "$RUNTIME_DIR saknas — laddar ner python-build-standalone."
