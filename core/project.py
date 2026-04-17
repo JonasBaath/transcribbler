@@ -230,9 +230,19 @@ def add_transcript(folder: str, project: dict, src_path: str, name: str = "",
             enriched.append(s)
         save_formatting(folder, tid, "__import__", enriched, key=key)
 
+    if name:
+        display_name = name
+    else:
+        title = fm.get("title")
+        date = str(fm.get("date", ""))[:10]
+        if title and len(date) == 10 and date[4] == "-" and date[7] == "-":
+            display_name = f"{title}_{date}"
+        else:
+            display_name = title or src.stem
+
     entry = {
         "id": tid,
-        "name": name or fm.get("title") or src.stem,
+        "name": display_name,
         "original": dest_name,
         "text_file": f"{tid}.txt",
         "tags": [],

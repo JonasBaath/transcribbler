@@ -686,10 +686,9 @@ def upload_transcript():
             md_tmp.close()
             old_tids = {t["id"] for t in updated.get("transcripts", [])}
             try:
-                note_name = Path(note_filename).stem
                 updated = proj_mod.add_transcript(
                     STATE["folder"], updated,
-                    md_tmp.name, note_name,
+                    md_tmp.name, "",
                     key=_key(),
                 )
                 imported += 1
