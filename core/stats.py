@@ -1,11 +1,13 @@
 """
 stats.py — Code usage statistics across a project or single transcript.
 """
+from __future__ import annotations
+
 from .annotation import load_all_coders
 from .codebook import get_code, build_tree
 
 
-def compute_stats(folder: str, project: dict, tid: str = None) -> dict:
+def compute_stats(folder: str, project: dict, tid: str = None, *, key: bytes | None = None) -> dict:
     """
     Return code usage statistics.
     If tid is given: stats for that transcript only, else across all transcripts.
@@ -18,7 +20,7 @@ def compute_stats(folder: str, project: dict, tid: str = None) -> dict:
     usage = {}
 
     for t in transcripts:
-        all_coders = load_all_coders(folder, t["id"])
+        all_coders = load_all_coders(folder, t["id"], key=key)
         for coder, anns in all_coders.items():
             for ann in anns:
                 cid = ann["code_id"]

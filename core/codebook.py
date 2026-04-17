@@ -2,6 +2,8 @@
 codebook.py — Code and theme management.
 Codes can be flat (parent=None) or hierarchical (parent=code_id).
 """
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 
@@ -82,7 +84,7 @@ def build_tree(project: dict) -> list:
     return roots
 
 
-def merge_codes(project: dict, folder: str, source_id: str, target_id: str) -> dict:
+def merge_codes(project: dict, folder: str, source_id: str, target_id: str, *, key: bytes | None = None) -> dict:
     """
     Merge source code into target: move all annotations from source to target,
     re-parent source's children to target, then delete source.
@@ -97,7 +99,7 @@ def merge_codes(project: dict, folder: str, source_id: str, target_id: str) -> d
 
     for t in project.get("transcripts", []):
         tid = t["id"]
-        by_coder = load_all_coders(folder, tid)
+        by_coder = load_all_coders(folder, tid, key=key)
         for coder, anns in by_coder.items():
             changed = False
             target_anns = [a for a in anns if a.get("code_id") == target_id]
@@ -117,7 +119,8 @@ def merge_codes(project: dict, folder: str, source_id: str, target_id: str) -> d
                 changed = True
             if changed:
                 save_annotations(folder, tid, coder,
-                                 [a for a in anns if not a.get("_delete")])
+                                 [a for a in anns if not a.get("_delete")],
+                                 key=key)
 
     # Re-parent source's children to target
     for c in project["codes"]:

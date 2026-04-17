@@ -3,9 +3,12 @@ main.py — Transcribbler Flask app.
 Run: python3 main.py
 Opens automatically in the default browser.
 """
+from __future__ import annotations
+
 import json
 import logging
 import os
+import shutil
 import sys
 import threading
 import time
@@ -43,10 +46,16 @@ app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0  # disable static file caching
 # State (single-session, in-memory)
 # ---------------------------------------------------------------------------
 STATE = {
-    "folder": None,   # active project folder (str)
-    "project": None,  # project dict
-    "coder": None,    # active coder name
+    "folder": None,         # active project folder (str)
+    "project": None,        # project dict
+    "coder": None,          # active coder name
+    "_derived_key": None,   # encryption key (bytes) — never written to disk
 }
+
+
+def _key() -> bytes | None:
+    """Return the derived encryption key, or None for unencrypted projects."""
+    return STATE.get("_derived_key")
 
 # ---------------------------------------------------------------------------
 # Background job store
@@ -82,7 +91,7 @@ _PROJECT_LOCK = threading.Lock()
 
 RECENT_FILE = Path.home() / ".transcribbler_recent.json"
 CONFIG_FILE = Path.home() / ".transcribbler_config.json"
-MAX_RECENT = 8
+MAX_RECENT = 5
 
 
 # ---------------------------------------------------------------------------
@@ -119,6 +128,12 @@ def _save_recent(folder: str, project_name: str):
     recent = [r for r in _load_recent() if r["folder"] != folder]
     recent.insert(0, {"folder": folder, "name": project_name})
     recent = recent[:MAX_RECENT]
+    with open(RECENT_FILE, "w", encoding="utf-8") as f:
+        json.dump(recent, f, ensure_ascii=False, indent=2)
+
+
+def _remove_recent(folder: str):
+    recent = [r for r in _load_recent() if r["folder"] != folder]
     with open(RECENT_FILE, "w", encoding="utf-8") as f:
         json.dump(recent, f, ensure_ascii=False, indent=2)
 
@@ -250,14 +265,58 @@ def new_project():
     folder = data.get("folder", "").strip()
     name = data.get("name", "").strip()
     coder = data.get("coder", "").strip()
+    password = data.get("password", "").strip() or None
     if not folder or not name or not coder:
         return jsonify({"error": "folder, name och coder krävs."}), 400
-    project = proj_mod.create_project(folder, name, coder)
+    project, derived_key = proj_mod.create_project(folder, name, coder, password=password)
     STATE["folder"] = folder
     STATE["project"] = project
     STATE["coder"] = coder
+    STATE["_derived_key"] = derived_key
     _save_recent(folder, name)
     return jsonify({"ok": True, "project": project})
+
+
+@app.route("/api/project/check-encrypted", methods=["POST"])
+def check_encrypted():
+    data = request.json or {}
+    folder = data.get("folder", "").strip()
+    if not folder:
+        return jsonify({"encrypted": False})
+    return jsonify({"encrypted": proj_mod.check_encrypted(folder)})
+
+
+@app.route("/api/project/delete", methods=["POST"])
+def delete_project():
+    data = request.json or {}
+    folder = data.get("folder", "").strip()
+    if not folder:
+        return jsonify({"error": "folder krävs."}), 400
+    folder_path = Path(folder)
+    project_file = folder_path / proj_mod.PROJECT_FILE
+    if not project_file.exists():
+        _remove_recent(folder)
+        return jsonify({"error": "Projektfil saknas."}), 404
+    # Delete Transcribbler project files only
+    project_file.unlink(missing_ok=True)
+    transcripts_dir = folder_path / proj_mod.TRANSCRIPTS_DIR
+    annotations_dir = folder_path / proj_mod.ANNOTATIONS_DIR
+    if transcripts_dir.is_dir():
+        shutil.rmtree(transcripts_dir)
+    if annotations_dir.is_dir():
+        shutil.rmtree(annotations_dir)
+    # Remove empty folder (only if nothing else remains except .DS_Store)
+    remaining = [f.name for f in folder_path.iterdir() if f.name != ".DS_Store"]
+    if not remaining:
+        shutil.rmtree(folder_path, ignore_errors=True)
+    _remove_recent(folder)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/crypto/generate-passphrase", methods=["GET"])
+def generate_passphrase():
+    from core.wordlist import generate_passphrase as _gen
+    return jsonify({"passphrase": _gen()})
 
 
 @app.route("/api/project/open", methods=["POST"])
@@ -265,15 +324,24 @@ def open_project():
     data = request.json
     folder = data.get("folder", "").strip()
     coder = data.get("coder", "").strip()
+    password = data.get("password", "").strip() or None
     if not folder or not coder:
         return jsonify({"error": "folder och coder krävs."}), 400
     try:
-        project = proj_mod.open_project(folder)
+        project, derived_key = proj_mod.open_project(folder, password=password)
     except FileNotFoundError:
         return jsonify({"error": "Ingen giltig projektmapp."}), 404
+    except ValueError as e:
+        msg = str(e)
+        if msg == "encrypted":
+            return jsonify({"error": "encrypted", "encrypted": True}), 401
+        elif msg == "wrong_password":
+            return jsonify({"error": "wrong_password"}), 401
+        return jsonify({"error": msg}), 400
     STATE["folder"] = folder
     STATE["project"] = project
     STATE["coder"] = coder
+    STATE["_derived_key"] = derived_key
     _save_recent(folder, project["name"])
     return jsonify({"ok": True, "project": project})
 
@@ -301,7 +369,7 @@ def update_project_settings():
     for k, v in data.items():
         if k in allowed:
             STATE["project"][k] = v
-    proj_mod.save_project(STATE["folder"], STATE["project"])
+    proj_mod.save_project(STATE["folder"], STATE["project"], key=_key())
     return jsonify({"ok": True, "project": STATE["project"]})
 
 
@@ -310,7 +378,8 @@ def update_project_settings():
 # ---------------------------------------------------------------------------
 
 def _transcription_job(job_id: str, audio_path: str, folder: str,
-                        project: dict, name: str, settings: dict):
+                        project: dict, name: str, settings: dict,
+                        enc_key: bytes | None = None):
     """
     Worker thread: diarize (optional) + transcribe, then store result in JOBS.
     audio_path is a temp file owned by this job; cleaned up on commit or error.
@@ -407,7 +476,8 @@ def _transcription_job(job_id: str, audio_path: str, folder: str,
             pass
 
 
-def _ocr_job(job_id: str, image_path: str, folder: str, project: dict, name: str):
+def _ocr_job(job_id: str, image_path: str, folder: str, project: dict, name: str,
+             enc_key: bytes | None = None):
     """
     Worker thread: OCR på en bildfil → spara transkript automatiskt.
     image_path är en tempfil som ägs av detta jobb och städas upp vid klart/fel.
@@ -429,14 +499,18 @@ def _ocr_job(job_id: str, image_path: str, folder: str, project: dict, name: str
 
         # Spara OCR-rutor innan locken (ingen conflict-risk här)
         boxes_path = Path(folder) / "transcripts" / f"{tid}_ocr_boxes.json"
-        boxes_path.write_text(json.dumps(boxes, ensure_ascii=False), encoding="utf-8")
+        if enc_key:
+            from core.crypto import encrypt_json_file
+            encrypt_json_file(boxes_path, boxes, enc_key)
+        else:
+            boxes_path.write_text(json.dumps(boxes, ensure_ascii=False), encoding="utf-8")
 
         # Läs om project från disk under lock för att undvika race condition
         # när flera bilder importeras parallellt.
         with _PROJECT_LOCK:
-            current = proj_mod.open_project(folder)
+            current = proj_mod.reload_project(folder, key=enc_key)
             updated = proj_mod.add_image_transcript(
-                folder, current, tid, name, image_path, text
+                folder, current, tid, name, image_path, text, key=enc_key,
             )
             STATE["project"] = updated
 
@@ -505,7 +579,7 @@ def upload_transcript():
                 shutil.copy2(tmp.name, dest)
                 updated = proj_mod.add_image_transcript(
                     STATE["folder"], STATE["project"], tid, img_name,
-                    str(dest), ""
+                    str(dest), "", key=_key(),
                 )
                 STATE["project"] = updated
                 return jsonify({"ok": True, "project": updated})
@@ -523,7 +597,7 @@ def upload_transcript():
         threading.Thread(
             target=_ocr_job,
             args=(job_id, tmp.name, STATE["folder"],
-                  STATE["project"], name or original_stem),
+                  STATE["project"], name or original_stem, _key()),
             daemon=True,
         ).start()
         return jsonify({"job_id": job_id})
@@ -551,6 +625,7 @@ def upload_transcript():
             updated = proj_mod.add_transcript(
                 STATE["folder"], STATE["project"],
                 md_tmp.name, name or original_stem,
+                key=_key(),
             )
             STATE["project"] = updated
             return jsonify({"ok": True, "project": updated})
@@ -615,6 +690,7 @@ def upload_transcript():
                 updated = proj_mod.add_transcript(
                     STATE["folder"], updated,
                     md_tmp.name, note_name,
+                    key=_key(),
                 )
                 imported += 1
             except Exception:
@@ -640,7 +716,8 @@ def upload_transcript():
                         logger.exception("Failed to save nsenc photo %s", photo_name)
                 if saved:
                     updated = proj_mod.set_transcript_photos(
-                        STATE["folder"], updated, new_t["id"], saved)
+                        STATE["folder"], updated, new_t["id"], saved,
+                        key=_key())
         STATE["project"] = updated
         return jsonify({"ok": True, "project": updated, "count": imported})
     elif ext == ".zip":
@@ -691,6 +768,7 @@ def upload_transcript():
                         updated = proj_mod.add_transcript(
                             STATE["folder"], updated,
                             md_tmp.name, note_name,
+                            key=_key(),
                         )
                         imported += 1
                     except Exception:
@@ -717,7 +795,8 @@ def upload_transcript():
                                 logger.exception("Failed to save photo %s", zip_photo)
                         if saved:
                             updated = proj_mod.set_transcript_photos(
-                                STATE["folder"], updated, new_t["id"], saved)
+                                STATE["folder"], updated, new_t["id"], saved,
+                                key=_key())
             STATE["project"] = updated
             return jsonify({"ok": True, "project": updated, "count": imported})
         except zipfile.BadZipFile:
@@ -730,6 +809,7 @@ def upload_transcript():
             updated = proj_mod.add_transcript(
                 STATE["folder"], STATE["project"],
                 tmp.name, name or original_stem,
+                key=_key(),
             )
             STATE["project"] = updated
             return jsonify({"ok": True, "project": updated})
@@ -782,7 +862,7 @@ def upload_transcript():
     t = threading.Thread(
         target=_transcription_job,
         args=(job_id, tmp.name, STATE["folder"],
-              STATE["project"], name or original_stem, settings),
+              STATE["project"], name or original_stem, settings, _key()),
         daemon=True,
     )
     t.start()
@@ -866,10 +946,11 @@ def commit_transcript(job_id):
 
     try:
         with _PROJECT_LOCK:
-            current = proj_mod.open_project(STATE["folder"])
+            current = proj_mod.reload_project(STATE["folder"], key=enc_key)
             updated = proj_mod.add_audio_transcript(
                 STATE["folder"], current,
                 tid, name, audio_path, text, segments, meta,
+                key=enc_key,
             )
             STATE["project"] = updated
     except Exception:
@@ -1106,7 +1187,7 @@ def add_transcript():
             return jsonify({"error": "Transkription misslyckades."}), 500
 
     try:
-        updated = proj_mod.add_transcript(STATE["folder"], STATE["project"], str(src_path), name)
+        updated = proj_mod.add_transcript(STATE["folder"], STATE["project"], str(src_path), name, key=_key())
         STATE["project"] = updated
         return jsonify({"ok": True, "project": updated})
     except Exception:
@@ -1122,7 +1203,7 @@ def get_transcript_text(tid):
     t = next((t for t in STATE["project"]["transcripts"] if t["id"] == tid), None)
     if not t:
         return jsonify({"error": "Transkript hittades inte."}), 404
-    text = proj_mod.get_transcript_text(STATE["folder"], t)
+    text = proj_mod.get_transcript_text(STATE["folder"], t, key=_key())
     return jsonify({"text": text})
 
 
@@ -1143,7 +1224,11 @@ def update_transcript_text(tid):
     except (ValueError, KeyError):
         return jsonify({"error": "Ogiltig filsökväg."}), 400
     try:
-        txt_path.write_text(text, encoding="utf-8")
+        if _key():
+            from core.crypto import encrypt_text_file
+            encrypt_text_file(txt_path, text, _key())
+        else:
+            txt_path.write_text(text, encoding="utf-8")
     except Exception:
         logger.exception("update_transcript_text failed for tid=%s", tid)
         return jsonify({"error": "Kunde inte spara texten."}), 500
@@ -1174,7 +1259,14 @@ def project_search():
         if not txt_path.exists():
             continue
         try:
-            text = txt_path.read_text(encoding="utf-8")
+            if _key():
+                from core.crypto import is_encrypted_file, decrypt_text_file
+                if is_encrypted_file(txt_path):
+                    text = decrypt_text_file(txt_path, _key())
+                else:
+                    text = txt_path.read_text(encoding="utf-8")
+            else:
+                text = txt_path.read_text(encoding="utf-8")
         except Exception:
             continue
 
@@ -1281,11 +1373,19 @@ def get_ocr_boxes(tid):
     boxes_path = Path(STATE["folder"]) / "transcripts" / f"{tid}_ocr_boxes.json"
     if not boxes_path.exists():
         return jsonify({"boxes": []})
-    boxes = json.loads(boxes_path.read_text(encoding="utf-8"))
+    if _key():
+        from core.crypto import is_encrypted_file, decrypt_json_file
+        if is_encrypted_file(boxes_path):
+            boxes = decrypt_json_file(boxes_path, _key())
+        else:
+            boxes = json.loads(boxes_path.read_text(encoding="utf-8"))
+    else:
+        boxes = json.loads(boxes_path.read_text(encoding="utf-8"))
     return jsonify({"boxes": boxes})
 
 
-def _ocr_photos_job(job_id: str, tid: str, folder: str, photo_paths: list):
+def _ocr_photos_job(job_id: str, tid: str, folder: str, photo_paths: list,
+                    enc_key: bytes | None = None):
     """Background job: OCR each attached photo and append extracted text to transcript."""
     from core.ocr import ocr_image
     JOBS[job_id]["status"] = "running"
@@ -1306,15 +1406,30 @@ def _ocr_photos_job(job_id: str, tid: str, folder: str, photo_paths: list):
 
         # Append to transcript .txt
         txt_path = Path(folder) / "transcripts" / f"{tid}.txt"
-        existing = txt_path.read_text(encoding="utf-8") if txt_path.exists() else ""
+        if enc_key:
+            from core.crypto import is_encrypted_file, decrypt_text_file, encrypt_text_file
+            if txt_path.exists() and is_encrypted_file(txt_path):
+                existing = decrypt_text_file(txt_path, enc_key)
+            elif txt_path.exists():
+                existing = txt_path.read_text(encoding="utf-8")
+            else:
+                existing = ""
+        else:
+            existing = txt_path.read_text(encoding="utf-8") if txt_path.exists() else ""
         separator = "\n\n---\n\n"
         appended = separator.join(texts)
-        txt_path.write_text(
-            (existing.rstrip() + separator + appended) if existing.strip() else appended,
-            encoding="utf-8",
-        )
+        new_text = (existing.rstrip() + separator + appended) if existing.strip() else appended
+        if enc_key:
+            from core.crypto import encrypt_text_file
+            encrypt_text_file(txt_path, new_text, enc_key)
+        else:
+            txt_path.write_text(new_text, encoding="utf-8")
 
-        JOBS[job_id]["result"] = {"appended": len(texts), "text": txt_path.read_text(encoding="utf-8")}
+        if enc_key:
+            final_text = new_text
+        else:
+            final_text = txt_path.read_text(encoding="utf-8")
+        JOBS[job_id]["result"] = {"appended": len(texts), "text": final_text}
         JOBS[job_id]["status"] = "done"
         JOBS[job_id]["progress"] = 1.0
     except Exception:
@@ -1349,7 +1464,7 @@ def ocr_transcript_photos(tid):
     JOBS[job_id] = {"status": "pending", "stage": "pending", "progress": 0.0, "result": None, "error": None}
     threading.Thread(
         target=_ocr_photos_job,
-        args=(job_id, tid, STATE["folder"], photo_paths),
+        args=(job_id, tid, STATE["folder"], photo_paths, _key()),
         daemon=True,
     ).start()
     return jsonify({"job_id": job_id})
@@ -1364,8 +1479,16 @@ def get_segments(tid):
     seg_path = Path(STATE["folder"]) / "transcripts" / f"{tid}_segments.json"
     if not seg_path.exists():
         return jsonify({"segments": []})
-    with open(seg_path, encoding="utf-8") as f:
-        segs = json.load(f)
+    if _key():
+        from core.crypto import is_encrypted_file, decrypt_json_file
+        if is_encrypted_file(seg_path):
+            segs = decrypt_json_file(seg_path, _key())
+        else:
+            with open(seg_path, encoding="utf-8") as f:
+                segs = json.load(f)
+    else:
+        with open(seg_path, encoding="utf-8") as f:
+            segs = json.load(f)
     return jsonify({"segments": segs})
 
 
@@ -1374,7 +1497,7 @@ def delete_transcript(tid):
     err = _require_project()
     if err:
         return err
-    STATE["project"] = proj_mod.remove_transcript(STATE["folder"], STATE["project"], tid)
+    STATE["project"] = proj_mod.remove_transcript(STATE["folder"], STATE["project"], tid, key=_key())
     return jsonify({"ok": True, "project": STATE["project"]})
 
 
@@ -1388,7 +1511,7 @@ def update_transcript_memo(tid):
         if t["id"] == tid:
             t["memo"] = memo
             break
-    proj_mod.save_project(STATE["folder"], STATE["project"])
+    proj_mod.save_project(STATE["folder"], STATE["project"], key=_key())
     return jsonify({"ok": True})
 
 
@@ -1406,7 +1529,7 @@ def rename_transcript(tid):
             break
     else:
         return jsonify({"error": "Transkript hittades inte."}), 404
-    proj_mod.save_project(STATE["folder"], STATE["project"])
+    proj_mod.save_project(STATE["folder"], STATE["project"], key=_key())
     return jsonify({"ok": True, "name": new_name})
 
 
@@ -1433,7 +1556,7 @@ def reorder_transcripts():
         if t["id"] not in seen:
             reordered.append(t)
     STATE["project"]["transcripts"] = reordered
-    proj_mod.save_project(STATE["folder"], STATE["project"])
+    proj_mod.save_project(STATE["folder"], STATE["project"], key=_key())
     return jsonify({"ok": True, "project": STATE["project"]})
 
 
@@ -1453,7 +1576,7 @@ def categorize_transcripts():
                 tr.pop("category", None)
             else:
                 tr["category"] = category
-    proj_mod.save_project(STATE["folder"], STATE["project"])
+    proj_mod.save_project(STATE["folder"], STATE["project"], key=_key())
     return jsonify({"ok": True, "project": STATE["project"]})
 
 
@@ -1543,7 +1666,7 @@ def add_code():
         color=data.get("color", "#4a90d9"),
         description=data.get("description", ""),
     )
-    proj_mod.save_project(STATE["folder"], STATE["project"])
+    proj_mod.save_project(STATE["folder"], STATE["project"], key=_key())
     return jsonify({"ok": True, "project": STATE["project"]})
 
 
@@ -1554,7 +1677,7 @@ def update_code(code_id):
         return err
     data = request.json
     STATE["project"] = cb_mod.update_code(STATE["project"], code_id, **data)
-    proj_mod.save_project(STATE["folder"], STATE["project"])
+    proj_mod.save_project(STATE["folder"], STATE["project"], key=_key())
     return jsonify({"ok": True, "project": STATE["project"]})
 
 
@@ -1573,17 +1696,29 @@ def delete_code(code_id):
             if f.stem.count(".") != 1:
                 continue
             try:
-                with open(f, encoding="utf-8") as fh:
-                    data = _json.load(fh)
+                if _key():
+                    from core.crypto import is_encrypted_file, decrypt_json_file, encrypt_json_file
+                    if is_encrypted_file(f):
+                        data = decrypt_json_file(f, _key())
+                    else:
+                        with open(f, encoding="utf-8") as fh:
+                            data = _json.load(fh)
+                else:
+                    with open(f, encoding="utf-8") as fh:
+                        data = _json.load(fh)
                 anns = data.get("annotations", [])
                 kept = [a for a in anns if a.get("code_id") != code_id]
                 if len(kept) != len(anns):
                     data["annotations"] = kept
-                    with open(f, "w", encoding="utf-8") as fh:
-                        _json.dump(data, fh, ensure_ascii=False, indent=2)
+                    if _key():
+                        from core.crypto import encrypt_json_file
+                        encrypt_json_file(f, data, _key())
+                    else:
+                        with open(f, "w", encoding="utf-8") as fh:
+                            _json.dump(data, fh, ensure_ascii=False, indent=2)
             except Exception:
                 logger.exception("delete_code cleanup failed for %s", f)
-    proj_mod.save_project(STATE["folder"], STATE["project"])
+    proj_mod.save_project(STATE["folder"], STATE["project"], key=_key())
     return jsonify({"ok": True, "project": STATE["project"]})
 
 
@@ -1601,8 +1736,8 @@ def merge_codes_route():
         return jsonify({"error": "Cannot merge a code into itself"}), 400
     try:
         STATE["project"] = cb_mod.merge_codes(
-            STATE["project"], STATE["folder"], source_id, target_id)
-        proj_mod.save_project(STATE["folder"], STATE["project"])
+            STATE["project"], STATE["folder"], source_id, target_id, key=_key())
+        proj_mod.save_project(STATE["folder"], STATE["project"], key=_key())
         return jsonify({"ok": True, "project": STATE["project"]})
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -1621,7 +1756,7 @@ def get_annotations(tid):
     if err:
         return err
     coder = request.args.get("coder", STATE["coder"])
-    anns = ann_mod.load_annotations(STATE["folder"], tid, coder)
+    anns = ann_mod.load_annotations(STATE["folder"], tid, coder, key=_key())
     return jsonify({"annotations": anns})
 
 
@@ -1630,7 +1765,7 @@ def get_all_annotations(tid):
     err = _require_project()
     if err:
         return err
-    all_coders = ann_mod.load_all_coders(STATE["folder"], tid)
+    all_coders = ann_mod.load_all_coders(STATE["folder"], tid, key=_key())
     return jsonify({"by_coder": all_coders})
 
 
@@ -1653,6 +1788,7 @@ def add_annotation(tid):
             memo=data.get("memo", ""),
             weight=int(data.get("weight", 50)),
             anchor=bool(data.get("anchor", False)),
+            key=_key(),
         )
     else:
         required = {"code_id", "start", "end", "text"}
@@ -1667,6 +1803,7 @@ def add_annotation(tid):
             memo=data.get("memo", ""),
             weight=int(data.get("weight", 50)),
             anchor=bool(data.get("anchor", False)),
+            key=_key(),
         )
     return jsonify({"ok": True, "annotation": ann})
 
@@ -1677,7 +1814,7 @@ def update_annotation(tid, ann_id):
     if err:
         return err
     data = request.json
-    ok = ann_mod.update_annotation(STATE["folder"], tid, STATE["coder"], ann_id, **data)
+    ok = ann_mod.update_annotation(STATE["folder"], tid, STATE["coder"], ann_id, key=_key(), **data)
     return jsonify({"ok": ok})
 
 
@@ -1686,7 +1823,7 @@ def delete_annotation(tid, ann_id):
     err = _require_project()
     if err:
         return err
-    ok = ann_mod.delete_annotation(STATE["folder"], tid, STATE["coder"], ann_id)
+    ok = ann_mod.delete_annotation(STATE["folder"], tid, STATE["coder"], ann_id, key=_key())
     return jsonify({"ok": ok})
 
 
@@ -1709,7 +1846,7 @@ def merge():
     if src_path.suffix.lower() != ".json":
         return jsonify({"error": "Filen måste vara en JSON-fil (.json)."}), 400
     try:
-        result = merge_mod.import_coder_file(STATE["folder"], str(src_path))
+        result = merge_mod.import_coder_file(STATE["folder"], str(src_path), key=_key())
         return jsonify({"ok": True, **result})
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -1723,7 +1860,7 @@ def get_conflicts(tid):
     err = _require_project()
     if err:
         return err
-    conflicts = merge_mod.detect_conflicts(STATE["folder"], tid)
+    conflicts = merge_mod.detect_conflicts(STATE["folder"], tid, key=_key())
     return jsonify({"conflicts": conflicts})
 
 
@@ -1751,7 +1888,7 @@ def export_csv_tidy():
     if err:
         return err
     tid = request.args.get("tid") or None
-    csv_data = exp_mod.export_csv_tidy(STATE["folder"], STATE["project"], tid)
+    csv_data = exp_mod.export_csv_tidy(STATE["folder"], STATE["project"], tid, key=_key())
     fname = _export_filename("annoteringar_tidy", "csv")
     return app.response_class(csv_data, mimetype="text/csv",
                               headers={"Content-Disposition": f'attachment; filename="{fname}"'})
@@ -1763,7 +1900,7 @@ def export_csv():
     if err:
         return err
     tid = request.args.get("tid") or None
-    csv_data = exp_mod.export_csv(STATE["folder"], STATE["project"], tid)
+    csv_data = exp_mod.export_csv(STATE["folder"], STATE["project"], tid, key=_key())
     fname = _export_filename("annoteringar", "csv")
     return app.response_class(csv_data, mimetype="text/csv",
                               headers={"Content-Disposition": f'attachment; filename="{fname}"'})
@@ -1775,7 +1912,7 @@ def export_md_codes():
     if err:
         return err
     tid = request.args.get("tid") or None
-    md = exp_mod.export_markdown_by_code(STATE["folder"], STATE["project"], tid)
+    md = exp_mod.export_markdown_by_code(STATE["folder"], STATE["project"], tid, key=_key())
     return app.response_class(md, mimetype="text/markdown",
                               headers={"Content-Disposition": f'attachment; filename="{_export_filename("citat_per_kod", "md")}"'})
 
@@ -1787,7 +1924,7 @@ def export_md_codebook():
         return err
     from core.stats import compute_stats
     try:
-        result = compute_stats(STATE["folder"], STATE["project"])
+        result = compute_stats(STATE["folder"], STATE["project"], key=_key())
         counts = {r["code_id"]: r["count"] for r in result["rows"]}
     except Exception:
         logger.exception("compute_stats failed in md codebook export")
@@ -1803,7 +1940,7 @@ def get_codes_stats():
     if err:
         return err
     from core.stats import compute_stats
-    result = compute_stats(STATE["folder"], STATE["project"])
+    result = compute_stats(STATE["folder"], STATE["project"], key=_key())
     counts = {r["code_id"]: r["count"] for r in result["rows"]}
     return jsonify(counts)
 
@@ -1815,7 +1952,7 @@ def export_codebook_csv():
         return err
     from core.stats import compute_stats
     try:
-        result = compute_stats(STATE["folder"], STATE["project"])
+        result = compute_stats(STATE["folder"], STATE["project"], key=_key())
         counts = {r["code_id"]: r["count"] for r in result["rows"]}
     except Exception:
         logger.exception("compute_stats failed in codebook CSV export")
@@ -1834,7 +1971,7 @@ def export_md_transcript(tid):
     if err:
         return err
     coder = request.args.get("coder", STATE["coder"])
-    md = exp_mod.export_markdown_transcript(STATE["folder"], STATE["project"], tid, coder)
+    md = exp_mod.export_markdown_transcript(STATE["folder"], STATE["project"], tid, coder, key=_key())
     return app.response_class(md, mimetype="text/markdown",
                               headers={"Content-Disposition": f'attachment; filename="{_export_filename(f"transkript_{tid}", "md")}"'})
 
@@ -1849,7 +1986,7 @@ def get_code_matrix():
     if err:
         return err
     from core.code_matrix import compute_code_matrix
-    return jsonify(compute_code_matrix(STATE["folder"], STATE["project"]))
+    return jsonify(compute_code_matrix(STATE["folder"], STATE["project"], key=_key()))
 
 
 @app.route("/api/export/code-matrix/csv", methods=["GET"])
@@ -1859,7 +1996,7 @@ def export_code_matrix_csv():
         return err
     import io, csv
     from core.code_matrix import compute_code_matrix
-    data = compute_code_matrix(STATE["folder"], STATE["project"])
+    data = compute_code_matrix(STATE["folder"], STATE["project"], key=_key())
     buf = io.StringIO()
     w = csv.writer(buf)
     header = ["Transkript"] + [c["name"] for c in data["codes"]]
@@ -1887,7 +2024,7 @@ def get_cooccurrence():
     if err:
         return err
     from core.cooccurrence import compute_cooccurrence
-    return jsonify(compute_cooccurrence(STATE["folder"], STATE["project"]))
+    return jsonify(compute_cooccurrence(STATE["folder"], STATE["project"], key=_key()))
 
 
 @app.route("/api/export/cooccurrence/csv", methods=["GET"])
@@ -1897,7 +2034,7 @@ def export_cooccurrence_csv():
         return err
     import io, csv
     from core.cooccurrence import compute_cooccurrence
-    data = compute_cooccurrence(STATE["folder"], STATE["project"])
+    data = compute_cooccurrence(STATE["folder"], STATE["project"], key=_key())
     codes = data["codes"]
     matrix = data["matrix"]
     buf = io.StringIO()
@@ -1923,7 +2060,7 @@ def export_qdpx():
     if err:
         return err
     from core.qdpx import export_qdpx as _export_qdpx
-    zip_bytes = _export_qdpx(STATE["folder"], STATE["project"])
+    zip_bytes = _export_qdpx(STATE["folder"], STATE["project"], key=_key())
     return app.response_class(
         zip_bytes,
         mimetype="application/zip",
@@ -1979,8 +2116,8 @@ def get_formatting(tid):
     if err:
         return err
     from core.formatting import load_formatting
-    spans = load_formatting(STATE["folder"], tid, STATE["coder"])
-    imported = load_formatting(STATE["folder"], tid, "__import__")
+    spans = load_formatting(STATE["folder"], tid, STATE["coder"], key=_key())
+    imported = load_formatting(STATE["folder"], tid, "__import__", key=_key())
     seen = {s["id"] for s in spans}
     for s in imported:
         if s["id"] not in seen:
@@ -1998,7 +2135,8 @@ def add_formatting(tid):
     try:
         span = add_format_span(
             STATE["folder"], tid, STATE["coder"],
-            start=data["start"], end=data["end"], fmt_type=data["type"]
+            start=data["start"], end=data["end"], fmt_type=data["type"],
+            key=_key(),
         )
         return jsonify({"ok": True, "span": span})
     except Exception:
@@ -2012,7 +2150,7 @@ def delete_formatting(tid, span_id):
     if err:
         return err
     from core.formatting import delete_format_span
-    ok = delete_format_span(STATE["folder"], tid, STATE["coder"], span_id)
+    ok = delete_format_span(STATE["folder"], tid, STATE["coder"], span_id, key=_key())
     return jsonify({"ok": ok})
 
 
@@ -2026,7 +2164,7 @@ def get_analysis_excerpts():
     if err:
         return err
     from core.analysis import gather_excerpts
-    return jsonify(gather_excerpts(STATE["folder"], STATE["project"]))
+    return jsonify(gather_excerpts(STATE["folder"], STATE["project"], key=_key()))
 
 
 @app.route("/api/analysis/export", methods=["POST"])
@@ -2044,7 +2182,7 @@ def export_analysis():
     excerpt_ids = data.get("excerpt_ids")
     anchor_only = data.get("anchor_only", False)
 
-    result = gather_excerpts(STATE["folder"], STATE["project"])
+    result = gather_excerpts(STATE["folder"], STATE["project"], key=_key())
     excerpts = result["excerpts"]
 
     if code_ids:
@@ -2133,7 +2271,7 @@ def export_to_folder():
 
     if "csv_tidy" in formats:
         try:
-            csv_data = exp_mod.export_csv_tidy(STATE["folder"], STATE["project"], tid)
+            csv_data = exp_mod.export_csv_tidy(STATE["folder"], STATE["project"], tid, key=_key())
             fname = _export_filename("annoteringar_tidy", "csv")
             (dest / fname).write_text(csv_data, encoding="utf-8")
             written.append(fname)
@@ -2143,7 +2281,7 @@ def export_to_folder():
 
     if "csv" in formats:
         try:
-            csv_data = exp_mod.export_csv(STATE["folder"], STATE["project"], tid)
+            csv_data = exp_mod.export_csv(STATE["folder"], STATE["project"], tid, key=_key())
             fname = _export_filename("annoteringar", "csv")
             (dest / fname).write_text(csv_data, encoding="utf-8")
             written.append(fname)
@@ -2153,7 +2291,7 @@ def export_to_folder():
 
     if "md_codes" in formats:
         try:
-            md = exp_mod.export_markdown_by_code(STATE["folder"], STATE["project"], tid)
+            md = exp_mod.export_markdown_by_code(STATE["folder"], STATE["project"], tid, key=_key())
             fname = _export_filename("citat_per_kod", "md")
             (dest / fname).write_text(md, encoding="utf-8")
             written.append(fname)
@@ -2165,7 +2303,7 @@ def export_to_folder():
         try:
             from core.stats import compute_stats as _cs
             try:
-                _r = _cs(STATE["folder"], STATE["project"])
+                _r = _cs(STATE["folder"], STATE["project"], key=_key())
                 _cb_counts = {r["code_id"]: r["count"] for r in _r["rows"]}
             except Exception:
                 _cb_counts = {}
@@ -2182,7 +2320,7 @@ def export_to_folder():
             return jsonify({"error": "Inget transkript öppet för detta exportformat."}), 400
         try:
             coder = STATE["coder"]
-            md = exp_mod.export_markdown_transcript(STATE["folder"], STATE["project"], tid, coder)
+            md = exp_mod.export_markdown_transcript(STATE["folder"], STATE["project"], tid, coder, key=_key())
             fname = _export_filename(f"transkript_{tid}", "md")
             (dest / fname).write_text(md, encoding="utf-8")
             written.append(fname)
@@ -2194,7 +2332,7 @@ def export_to_folder():
         try:
             from core.qdpx import export_qdpx as _export_qdpx
             fname = _export_filename("projekt", "qdpx")
-            (dest / fname).write_bytes(_export_qdpx(STATE["folder"], STATE["project"]))
+            (dest / fname).write_bytes(_export_qdpx(STATE["folder"], STATE["project"], key=_key()))
             written.append(fname)
         except Exception:
             logger.exception("export qdpx failed")

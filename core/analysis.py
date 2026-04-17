@@ -1,6 +1,8 @@
 """
 analysis.py — Gather coded excerpts across all transcripts for the analysis view.
 """
+from __future__ import annotations
+
 from pathlib import Path
 from .annotation import load_all_coders
 from .codebook import build_tree
@@ -21,7 +23,7 @@ def _tree_walk_order(tree):
     yield from walk(tree)
 
 
-def gather_excerpts(folder: str, project: dict):
+def gather_excerpts(folder: str, project: dict, *, key: bytes | None = None):
     """
     Gather all coded excerpts across all transcripts.
     Returns {excerpts: [...], code_counts: {code_id: count}}.
@@ -64,8 +66,8 @@ def gather_excerpts(folder: str, project: dict):
 
     for t_idx, t in enumerate(transcripts):
         tid = t["id"]
-        by_coder = load_all_coders(folder, tid)
-        text = get_transcript_text(folder, t)
+        by_coder = load_all_coders(folder, tid, key=key)
+        text = get_transcript_text(folder, t, key=key)
 
         for coder, anns in by_coder.items():
             for ann in anns:

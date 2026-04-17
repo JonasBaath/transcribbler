@@ -43,7 +43,8 @@ def _sub(parent, tag, **attrib):
     return ET.SubElement(parent, f"{{{_NS}}}{tag}", **attrib)
 
 
-def export_qdpx(folder: str, project: dict) -> bytes:
+def export_qdpx(folder: str, project: dict,
+                key: bytes | None = None) -> bytes:
     """
     Build and return a .qdpx (ZIP) file as bytes.
 
@@ -126,7 +127,14 @@ def export_qdpx(folder: str, project: dict) -> bytes:
         if not txt_path.exists():
             continue
 
-        plain_text = txt_path.read_text(encoding="utf-8")
+        if key:
+            from core.crypto import is_encrypted_file, decrypt_text_file
+            if is_encrypted_file(txt_path):
+                plain_text = decrypt_text_file(txt_path, key)
+            else:
+                plain_text = txt_path.read_text(encoding="utf-8")
+        else:
+            plain_text = txt_path.read_text(encoding="utf-8")
         internal_path = f"sources/{tid}.txt"
 
         src_el = _sub(
@@ -138,7 +146,7 @@ def export_qdpx(folder: str, project: dict) -> bytes:
         )
 
         # Codings — one per annotation per coder
-        all_coders_data = load_all_coders(folder, tid)
+        all_coders_data = load_all_coders(folder, tid, key=key)
         for coder, anns in all_coders_data.items():
             coder_guid = coder_guids.get(coder, _fresh_guid())
             for ann in anns:

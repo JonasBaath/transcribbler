@@ -3,6 +3,9 @@ project.py — Project management for Transcribbler.
 A project is a folder containing project.json, a transcripts/ subdir,
 and an annotations/ subdir.
 """
+from __future__ import annotations
+
+import base64
 import json
 import os
 import shutil
@@ -28,8 +31,12 @@ def _now():
 # Create / open
 # ---------------------------------------------------------------------------
 
-def create_project(folder: str, name: str, coder: str) -> dict:
-    """Initialise a new project folder and return the project dict."""
+def create_project(folder: str, name: str, coder: str,
+                   password: str | None = None) -> tuple:
+    """Initialise a new project folder.
+
+    Returns (project_dict, derived_key | None).
+    """
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
     (folder / TRANSCRIPTS_DIR).mkdir(exist_ok=True)
@@ -46,16 +53,71 @@ def create_project(folder: str, name: str, coder: str) -> dict:
         "numbering": True,
         "trans_order": True,
     }
-    _save(folder, project)
-    return project
+
+    derived_key = None
+    if password:
+        from core.crypto import derive_key, make_verify_token
+        salt = os.urandom(16)
+        derived_key = derive_key(password, salt)
+        verify_token = make_verify_token(derived_key)
+        _save_encrypted(folder, project, derived_key, salt, verify_token)
+    else:
+        _save(folder, project)
+    return project, derived_key
 
 
-def open_project(folder: str) -> dict:
-    """Load and return an existing project dict."""
+def open_project(folder: str, password: str | None = None) -> tuple:
+    """Load an existing project.
+
+    Returns (project_dict, derived_key | None).
+    Raises ValueError if the project is encrypted and no/wrong password.
+    """
     path = Path(folder) / PROJECT_FILE
     with open(path, encoding="utf-8") as f:
-        project = json.load(f)
+        raw = json.load(f)
+
+    derived_key = None
+    if raw.get("encrypted"):
+        if not password:
+            raise ValueError("encrypted")
+        from core.crypto import derive_key, check_verify_token
+        salt = base64.b64decode(raw["salt"])
+        derived_key = derive_key(password, salt)
+        token = base64.b64decode(raw["verify_token"])
+        if not check_verify_token(token, derived_key):
+            raise ValueError("wrong_password")
+        from core.crypto import decrypt_blob
+        payload = base64.b64decode(raw["payload"])
+        project = json.loads(decrypt_blob(payload, derived_key))
+    else:
+        project = raw
+
     # Back-fill defaults for older projects missing these flags.
+    if "numbering" not in project:
+        project["numbering"] = True
+    if "trans_order" not in project:
+        project["trans_order"] = True
+    return project, derived_key
+
+
+def reload_project(folder: str, key: bytes | None = None) -> dict:
+    """Re-read project.json using an existing derived key (no password needed).
+
+    Used by background threads that need a fresh copy of the project dict.
+    """
+    path = Path(folder) / PROJECT_FILE
+    with open(path, encoding="utf-8") as f:
+        raw = json.load(f)
+
+    if raw.get("encrypted"):
+        if not key:
+            raise ValueError("Project is encrypted but no key provided.")
+        from core.crypto import decrypt_blob
+        payload = base64.b64decode(raw["payload"])
+        project = json.loads(decrypt_blob(payload, key))
+    else:
+        project = raw
+
     if "numbering" not in project:
         project["numbering"] = True
     if "trans_order" not in project:
@@ -63,19 +125,34 @@ def open_project(folder: str) -> dict:
     return project
 
 
-def save_project(folder: str, project: dict):
+def save_project(folder: str, project: dict, key: bytes | None = None):
     project["modified"] = _now()
-    _save(Path(folder), project)
+    if key:
+        _save_encrypted_update(Path(folder), project, key)
+    else:
+        _save(Path(folder), project)
 
 
-def set_transcript_photos(folder: str, project: dict, tid: str, photos: list) -> dict:
+def set_transcript_photos(folder: str, project: dict, tid: str, photos: list,
+                          key: bytes | None = None) -> dict:
     """Attach a list of photo filenames to a transcript entry and save project.json."""
     for t in project.get("transcripts", []):
         if t["id"] == tid:
             t["photos"] = photos
             break
-    _save(Path(folder), project)
+    save_project(folder, project, key)
     return project
+
+
+def check_encrypted(folder: str) -> bool:
+    """Return True if the project in *folder* is encrypted."""
+    path = Path(folder) / PROJECT_FILE
+    try:
+        with open(path, encoding="utf-8") as f:
+            raw = json.load(f)
+        return bool(raw.get("encrypted"))
+    except Exception:
+        return False
 
 
 def _save(folder: Path, project: dict):
@@ -84,11 +161,40 @@ def _save(folder: Path, project: dict):
         json.dump(project, f, ensure_ascii=False, indent=2)
 
 
+def _save_encrypted(folder: Path, project: dict, key: bytes,
+                    salt: bytes, verify_token: bytes):
+    """Write project.json as an encrypted envelope (first save)."""
+    from core.crypto import encrypt_blob
+    payload = json.dumps(project, ensure_ascii=False, indent=2).encode("utf-8")
+    envelope = {
+        "encrypted": True,
+        "salt": base64.b64encode(salt).decode(),
+        "verify_token": base64.b64encode(verify_token).decode(),
+        "payload": base64.b64encode(encrypt_blob(payload, key)).decode(),
+    }
+    path = folder / PROJECT_FILE
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(envelope, f, ensure_ascii=False, indent=2)
+
+
+def _save_encrypted_update(folder: Path, project: dict, key: bytes):
+    """Re-encrypt project.json preserving existing salt and verify_token."""
+    path = folder / PROJECT_FILE
+    with open(path, encoding="utf-8") as f:
+        existing = json.load(f)
+    from core.crypto import encrypt_blob
+    payload = json.dumps(project, ensure_ascii=False, indent=2).encode("utf-8")
+    existing["payload"] = base64.b64encode(encrypt_blob(payload, key)).decode()
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(existing, f, ensure_ascii=False, indent=2)
+
+
 # ---------------------------------------------------------------------------
 # Transcripts
 # ---------------------------------------------------------------------------
 
-def add_transcript(folder: str, project: dict, src_path: str, name: str = "") -> dict:
+def add_transcript(folder: str, project: dict, src_path: str, name: str = "",
+                   key: bytes | None = None) -> dict:
     """
     Copy a .txt or .docx file into the project's transcripts/ dir,
     extract text, register it in the project, return updated project.
@@ -107,7 +213,11 @@ def add_transcript(folder: str, project: dict, src_path: str, name: str = "") ->
     text, fmt_spans = _extract_text_with_formatting(src)
     # Save plain-text version alongside original
     txt_path = Path(folder) / TRANSCRIPTS_DIR / f"{tid}.txt"
-    txt_path.write_text(text, encoding="utf-8")
+    if key:
+        from core.crypto import encrypt_text_file
+        encrypt_text_file(txt_path, text, key)
+    else:
+        txt_path.write_text(text, encoding="utf-8")
 
     # Save formatting spans (bold/italic) if any were found in the document
     if fmt_spans:
@@ -118,7 +228,7 @@ def add_transcript(folder: str, project: dict, src_path: str, name: str = "") ->
             s["id"] = str(_uuid.uuid4())[:8]
             s["created"] = _now()
             enriched.append(s)
-        save_formatting(folder, tid, "__import__", enriched)
+        save_formatting(folder, tid, "__import__", enriched, key=key)
 
     entry = {
         "id": tid,
@@ -131,13 +241,14 @@ def add_transcript(folder: str, project: dict, src_path: str, name: str = "") ->
     if fm.get("category"):
         entry["category"] = fm["category"]
     project["transcripts"].append(entry)
-    save_project(folder, project)
+    save_project(folder, project, key)
     return project
 
 
 def add_audio_transcript(folder: str, project: dict, tid: str, name: str,
                          audio_src_path: str, text: str,
-                         segments: list, meta: dict) -> dict:
+                         segments: list, meta: dict,
+                         key: bytes | None = None) -> dict:
     """
     Finalise an audio-sourced transcript after diarization + transcription.
 
@@ -159,14 +270,22 @@ def add_audio_transcript(folder: str, project: dict, tid: str, name: str,
 
     # Write extracted plain text
     txt_path = folder_path / TRANSCRIPTS_DIR / f"{tid}.txt"
-    txt_path.write_text(text, encoding="utf-8")
+    if key:
+        from core.crypto import encrypt_text_file, encrypt_json_file
+        encrypt_text_file(txt_path, text, key)
+    else:
+        txt_path.write_text(text, encoding="utf-8")
 
     # Write segments (separate file — can be large)
     seg_path = folder_path / TRANSCRIPTS_DIR / f"{tid}_segments.json"
-    seg_path.write_text(
-        _json.dumps(segments, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    if key:
+        from core.crypto import encrypt_json_file as _ejf
+        _ejf(seg_path, segments, key)
+    else:
+        seg_path.write_text(
+            _json.dumps(segments, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
 
     entry = {
         "id": tid,
@@ -184,12 +303,13 @@ def add_audio_transcript(folder: str, project: dict, tid: str, name: str,
         "added": _now(),
     }
     project["transcripts"].append(entry)
-    save_project(folder, project)
+    save_project(folder, project, key)
     return project
 
 
 def add_image_transcript(folder: str, project: dict, tid: str, name: str,
-                         image_src_path: str, text: str) -> dict:
+                         image_src_path: str, text: str,
+                         key: bytes | None = None) -> dict:
     """
     Finalise an image-sourced transcript after OCR.
 
@@ -207,7 +327,11 @@ def add_image_transcript(folder: str, project: dict, tid: str, name: str,
 
     # Write extracted plain text
     txt_path = folder_path / TRANSCRIPTS_DIR / f"{tid}.txt"
-    txt_path.write_text(text, encoding="utf-8")
+    if key:
+        from core.crypto import encrypt_text_file
+        encrypt_text_file(txt_path, text, key)
+    else:
+        txt_path.write_text(text, encoding="utf-8")
 
     entry = {
         "id": tid,
@@ -219,16 +343,22 @@ def add_image_transcript(folder: str, project: dict, tid: str, name: str,
         "added": _now(),
     }
     project["transcripts"].append(entry)
-    save_project(folder, project)
+    save_project(folder, project, key)
     return project
 
 
-def get_transcript_text(folder: str, transcript: dict) -> str:
+def get_transcript_text(folder: str, transcript: dict,
+                        key: bytes | None = None) -> str:
     path = Path(folder) / TRANSCRIPTS_DIR / transcript["text_file"]
+    if key:
+        from core.crypto import is_encrypted_file, decrypt_text_file
+        if is_encrypted_file(path):
+            return decrypt_text_file(path, key)
     return path.read_text(encoding="utf-8")
 
 
-def remove_transcript(folder: str, project: dict, tid: str) -> dict:
+def remove_transcript(folder: str, project: dict, tid: str,
+                      key: bytes | None = None) -> dict:
     t = next((t for t in project["transcripts"] if t["id"] == tid), None)
     if not t:
         return project
@@ -256,7 +386,7 @@ def remove_transcript(folder: str, project: dict, tid: str) -> dict:
     ann_dir = Path(folder) / ANNOTATIONS_DIR
     for f in ann_dir.glob(f"{tid}.*.json"):
         f.unlink()
-    save_project(folder, project)
+    save_project(folder, project, key)
     return project
 
 
