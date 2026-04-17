@@ -347,9 +347,26 @@ def add_image_transcript(folder: str, project: dict, tid: str, name: str,
     return project
 
 
+def _safe_child(base: Path, name: str) -> Path | None:
+    # Resolve `base / name` and ensure it stays under `base`.
+    # Returns None if `name` contains path-traversal (e.g. "../etc/passwd")
+    # or is absolute. Protects routes that consume user-controlled file
+    # names from project.json.
+    base = Path(base).resolve()
+    candidate = (base / name).resolve()
+    try:
+        candidate.relative_to(base)
+    except ValueError:
+        return None
+    return candidate
+
+
 def get_transcript_text(folder: str, transcript: dict,
                         key: bytes | None = None) -> str:
-    path = Path(folder) / TRANSCRIPTS_DIR / transcript["text_file"]
+    tdir = Path(folder) / TRANSCRIPTS_DIR
+    path = _safe_child(tdir, transcript["text_file"])
+    if path is None:
+        raise ValueError("invalid text_file path")
     if key:
         from core.crypto import is_encrypted_file, decrypt_text_file
         if is_encrypted_file(path):
@@ -362,29 +379,35 @@ def remove_transcript(folder: str, project: dict, tid: str,
     t = next((t for t in project["transcripts"] if t["id"] == tid), None)
     if not t:
         return project
+    tdir = Path(folder) / TRANSCRIPTS_DIR
     for fname in [t.get("original"), t.get("text_file"), t.get("source_file")]:
         if fname:
-            p = Path(folder) / TRANSCRIPTS_DIR / fname
-            if p.exists():
+            p = _safe_child(tdir, fname)
+            if p and p.exists():
                 p.unlink()
     # Remove attached photos (imported from Notescribbler)
     for fname in t.get("photos", []):
         if fname:
-            p = Path(folder) / TRANSCRIPTS_DIR / fname
-            if p.exists():
+            p = _safe_child(tdir, fname)
+            if p and p.exists():
                 p.unlink()
     # Remove segments file (audio transcripts)
-    seg_path = Path(folder) / TRANSCRIPTS_DIR / f"{tid}_segments.json"
-    if seg_path.exists():
+    seg_path = _safe_child(tdir, f"{tid}_segments.json")
+    if seg_path and seg_path.exists():
         seg_path.unlink()
     # Remove OCR boxes file (image transcripts)
-    boxes_path = Path(folder) / TRANSCRIPTS_DIR / f"{tid}_ocr_boxes.json"
-    if boxes_path.exists():
+    boxes_path = _safe_child(tdir, f"{tid}_ocr_boxes.json")
+    if boxes_path and boxes_path.exists():
         boxes_path.unlink()
     project["transcripts"] = [t for t in project["transcripts"] if t["id"] != tid]
     # Remove all annotation files for this transcript
     ann_dir = Path(folder) / ANNOTATIONS_DIR
+    ann_dir_resolved = ann_dir.resolve()
     for f in ann_dir.glob(f"{tid}.*.json"):
+        try:
+            f.resolve().relative_to(ann_dir_resolved)
+        except ValueError:
+            continue
         f.unlink()
     save_project(folder, project, key)
     return project
