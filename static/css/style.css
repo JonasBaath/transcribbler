@@ -460,6 +460,15 @@ body.electron-mac #tools-dropdown {
 .recent-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .recent-path { font-size: 11px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #recent-section:empty { display: none; }
+.recent-delete {
+  flex-shrink: 0; width: 22px; height: 22px; border: none; background: none;
+  color: var(--text-dim); font-size: 14px; cursor: pointer; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center; opacity: 0;
+  transition: opacity .15s, background .15s, color .15s;
+}
+#recent-list li:hover .recent-delete { opacity: 1; }
+.recent-delete:hover { background: var(--danger); color: #fff; }
+.btn-danger:disabled { opacity: .45; cursor: not-allowed; }
 
 /* ---- Editor toolbar (format buttons) ---- */
 #editor-toolbar {
@@ -1571,3 +1580,37 @@ button:disabled {
   from { opacity: 1; transform: translateY(0); }
   to   { opacity: 0; transform: translateY(8px); }
 }
+
+/* ---- Encryption UI ---- */
+#encrypt-section { margin: 8px 0 4px; }
+.encrypt-check-row {
+  display: flex; align-items: center; gap: 6px;
+  cursor: pointer; font-size: 0.92rem;
+}
+.encrypt-check-row input[type="checkbox"] { margin: 0; }
+#encrypt-options { margin-top: 8px; padding-left: 4px; }
+.encrypt-radio-row {
+  display: flex; gap: 14px; margin-bottom: 8px; font-size: 0.88rem;
+}
+.encrypt-radio-row label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+.passphrase-display {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--bg-secondary, #1e1e1e); border-radius: 6px;
+  padding: 6px 10px; margin-bottom: 4px;
+}
+.passphrase-display code {
+  font-family: "SF Mono", Menlo, monospace; font-size: 1rem;
+  flex: 1; word-break: break-all;
+}
+.encrypt-warning {
+  color: #e8a838; font-size: 0.82rem; margin-top: 4px;
+}
+.pw-hints {
+  list-style: none; font-size: 0.82rem; margin-top: 4px;
+  display: flex; flex-wrap: wrap; gap: 4px 12px;
+}
+.pw-hints li::before { content: ""; display: inline-block; width: 8px; height: 8px;
+  border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+.pw-hints li.ok::before { background: #4caf50; }
+.pw-hints li.fail::before { background: #888; }
+#open-password-section { margin-bottom: 4px; }

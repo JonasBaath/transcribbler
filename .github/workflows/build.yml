@@ -2,9 +2,7 @@ name: Build Electron app
 
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    tags: ['v*']
   workflow_dispatch:
 
 jobs:
@@ -13,9 +11,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
-            build_cmd: build:mac
-            artifact: "electron/dist/*.dmg"
           - os: windows-latest
             build_cmd: build:win
             artifact: "electron/dist/*.exe"
@@ -59,4 +54,4 @@ jobs:
           name: transcribbler-${{ matrix.os }}
           path: ${{ matrix.artifact }}
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 7

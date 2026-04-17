@@ -6,12 +6,14 @@ For each character position in the transcript, we record which code_id
 each coder assigned (or None if uncoded). Cohen's Kappa is computed on
 these two vectors.
 """
+from __future__ import annotations
+
 from .annotation import load_annotations
 from .project import get_transcript_text
 
 
 def cohens_kappa(folder: str, project: dict, tid: str,
-                 coder_a: str, coder_b: str) -> dict:
+                 coder_a: str, coder_b: str, *, key: bytes | None = None) -> dict:
     """
     Compute Cohen's Kappa between two coders on a single transcript.
     Returns a dict with kappa, po, pe, agreement details.
@@ -20,13 +22,13 @@ def cohens_kappa(folder: str, project: dict, tid: str,
     if not t:
         raise ValueError(f"Transcript {tid} not found.")
 
-    text = get_transcript_text(folder, t)
+    text = get_transcript_text(folder, t, key=key)
     n = len(text)
     if n == 0:
         raise ValueError("Transcript is empty.")
 
-    anns_a = load_annotations(folder, tid, coder_a)
-    anns_b = load_annotations(folder, tid, coder_b)
+    anns_a = load_annotations(folder, tid, coder_a, key=key)
+    anns_b = load_annotations(folder, tid, coder_b, key=key)
 
     # Build character-level label vectors
     vec_a = _build_vector(anns_a, n)

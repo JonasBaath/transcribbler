@@ -2,7 +2,7 @@
   "name": "QISR - induktiv analys",
   "coder": "Jonas",
   "created": "2026-04-15T11:31:41",
-  "modified": "2026-04-15T15:22:20",
+  "modified": "2026-04-16T20:34:13",
   "codes": [
     {
       "id": "620f44a9",
@@ -35,12 +35,52 @@
       "color": "#cd3782",
       "description": "Organizational ambition for outcome",
       "created": "2026-04-15T12:34:38"
+    },
+    {
+      "id": "9818051e",
+      "name": "Expertkunskap",
+      "parent": null,
+      "color": "#56B4E9",
+      "description": "Matters of knowledge and expertise",
+      "created": "2026-04-15T17:11:34"
+    },
+    {
+      "id": "e9351400",
+      "name": "kod a",
+      "parent": null,
+      "color": "#44AA99",
+      "description": "",
+      "created": "2026-04-16T19:36:30"
+    },
+    {
+      "id": "b3610c19",
+      "name": "kod b",
+      "parent": null,
+      "color": "#D55E00",
+      "description": "",
+      "created": "2026-04-16T19:36:50"
+    },
+    {
+      "id": "262ac818",
+      "name": "<!=?",
+      "parent": null,
+      "color": "#000000",
+      "description": "",
+      "created": "2026-04-16T19:41:01"
+    },
+    {
+      "id": "610f2bed",
+      "name": "Malmö",
+      "parent": null,
+      "color": "#F0E442",
+      "description": "",
+      "created": "2026-04-16T20:31:50"
     }
   ],
   "transcripts": [
     {
       "id": "4128cf42",
-      "name": "Interview with Malmö Food Council - SLU-0001-ENG",
+      "name": "Sebastian transkript",
       "original": "4128cf42.docx",
       "text_file": "4128cf42.txt",
       "tags": [],
@@ -73,12 +113,20 @@
       "added": "2026-04-15T14:07:21"
     },
     {
-      "id": "c599dfd0",
-      "name": "STE-001-cut1-30s005-D",
+      "id": "22072530",
+      "name": "Andrew - Transcript",
+      "original": "22072530.docx",
+      "text_file": "22072530.txt",
+      "tags": [],
+      "added": "2026-04-15T17:18:36"
+    },
+    {
+      "id": "b37ce3fe",
+      "name": "STE-001-STOR",
       "source": "audio",
-      "original": "c599dfd0.wav",
-      "text_file": "c599dfd0.txt",
-      "audio_file": "c599dfd0.wav",
+      "original": "b37ce3fe.wav",
+      "text_file": "b37ce3fe.txt",
+      "audio_file": "b37ce3fe.wav",
       "whisper_model": "medium",
       "language": "sv",
       "diarization": true,
@@ -88,29 +136,21 @@
       },
       "speakers": {},
       "tags": [],
-      "added": "2026-04-15T15:20:35"
+      "added": "2026-04-16T06:46:25"
     },
     {
-      "id": "71cbe264",
-      "name": "STE-001-cut1-30s005",
-      "source": "audio",
-      "original": "71cbe264.wav",
-      "text_file": "71cbe264.txt",
-      "audio_file": "71cbe264.wav",
-      "whisper_model": "medium",
-      "language": "sv",
-      "diarization": false,
-      "diarization_settings": {
-        "segmentation_threshold": 0.5,
-        "clustering_threshold": 0.7
-      },
-      "speakers": {},
+      "id": "56595e9e",
+      "name": "kodtrad",
+      "source": "image",
+      "source_file": "56595e9e_source.png",
+      "text_file": "56595e9e.txt",
       "tags": [],
-      "added": "2026-04-15T15:22:20"
+      "added": "2026-04-16T15:46:02"
     }
   ],
   "speakers": [],
-  "numbering": false,
-  "trans_order": false,
-  "use_waveform": true
+  "numbering": true,
+  "trans_order": true,
+  "use_waveform": true,
+  "use_weight": true
 }

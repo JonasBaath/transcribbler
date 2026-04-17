@@ -8,7 +8,7 @@ from __future__ import annotations
 from .annotation import load_all_coders
 
 
-def compute_code_matrix(folder: str, project: dict) -> dict:
+def compute_code_matrix(folder: str, project: dict, *, key: bytes | None = None) -> dict:
     """
     Returns:
       {
@@ -30,7 +30,7 @@ def compute_code_matrix(folder: str, project: dict) -> dict:
     for t in transcripts:
         tid = t["id"]
         counts: dict = {}
-        all_coders = load_all_coders(folder, tid)
+        all_coders = load_all_coders(folder, tid, key=key)
         for coder_anns in all_coders.values():
             for ann in coder_anns:
                 cid = ann["code_id"]

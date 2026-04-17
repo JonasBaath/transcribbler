@@ -14,7 +14,7 @@ from .project import get_transcript_text
 # CSV
 # ---------------------------------------------------------------------------
 
-def export_csv(folder: str, project: dict, tid=None) -> str:
+def export_csv(folder: str, project: dict, tid=None, *, key: bytes | None = None) -> str:
     """
     Export all annotations to CSV.
     If tid is given, only that transcript; otherwise all.
@@ -30,7 +30,7 @@ def export_csv(folder: str, project: dict, tid=None) -> str:
                      "start", "end", "text", "memo", "created"])
 
     for t in transcripts:
-        all_coders = load_all_coders(folder, t["id"])
+        all_coders = load_all_coders(folder, t["id"], key=key)
         for coder, anns in all_coders.items():
             for ann in anns:
                 if ann.get("kind") == "point":
@@ -52,7 +52,7 @@ def export_csv(folder: str, project: dict, tid=None) -> str:
 # Markdown
 # ---------------------------------------------------------------------------
 
-def export_markdown_by_code(folder: str, project: dict, tid=None) -> str:
+def export_markdown_by_code(folder: str, project: dict, tid=None, *, key: bytes | None = None) -> str:
     """
     Export quotes grouped by code/theme in Markdown format.
     """
@@ -63,7 +63,7 @@ def export_markdown_by_code(folder: str, project: dict, tid=None) -> str:
     # Gather all annotations keyed by code_id
     by_code: dict[str, list] = {}
     for t in transcripts:
-        all_coders = load_all_coders(folder, t["id"])
+        all_coders = load_all_coders(folder, t["id"], key=key)
         for coder, anns in all_coders.items():
             for ann in anns:
                 cid = ann["code_id"]
@@ -92,7 +92,7 @@ def export_markdown_by_code(folder: str, project: dict, tid=None) -> str:
     return "\n".join(lines)
 
 
-def export_csv_tidy(folder: str, project: dict, tid=None) -> str:
+def export_csv_tidy(folder: str, project: dict, tid=None, *, key: bytes | None = None) -> str:
     """
     Export annotations in tidy (long) format for R/Python analysis.
     One row per annotation with all metadata as columns.
@@ -114,7 +114,7 @@ def export_csv_tidy(folder: str, project: dict, tid=None) -> str:
     ])
 
     for t in transcripts:
-        all_coders = load_all_coders(folder, t["id"])
+        all_coders = load_all_coders(folder, t["id"], key=key)
         cat = t.get("category", "")
         for coder, anns in all_coders.items():
             for ann in anns:
@@ -207,15 +207,15 @@ def export_markdown_codebook(project: dict, counts: dict | None = None) -> str:
     return "\n".join(lines)
 
 
-def export_markdown_transcript(folder: str, project: dict, tid: str, coder: str) -> str:
+def export_markdown_transcript(folder: str, project: dict, tid: str, coder: str, *, key: bytes | None = None) -> str:
     """Export a transcript with inline code annotations."""
     from .annotation import load_annotations
     t = next((t for t in project["transcripts"] if t["id"] == tid), None)
     if not t:
         return "_Transkript hittades inte._\n"
 
-    text = get_transcript_text(folder, t)
-    anns = load_annotations(folder, tid, coder)
+    text = get_transcript_text(folder, t, key=key)
+    anns = load_annotations(folder, tid, coder, key=key)
     anns_sorted = sorted(anns, key=lambda a: a["start"])
 
     lines = [f"# {t['name']}\n", f"_Kodare: {coder}_\n\n---\n"]

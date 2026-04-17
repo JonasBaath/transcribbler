@@ -333,7 +333,7 @@ async function loadRecentProjects() {
     return;
   }
   section.style.display = "";
-  res.recent.forEach((r, i) => {
+  res.recent.slice(0, 5).forEach((r, i) => {
     const li = document.createElement("li");
     if (i === 0) li.classList.add("recent-selected");
     li.innerHTML = `
@@ -341,16 +341,23 @@ async function loadRecentProjects() {
       <span class="recent-info">
         <span class="recent-name">${esc(r.name)}</span>
         <span class="recent-path">${esc(r.folder)}</span>
-      </span>`;
+      </span>
+      <button class="recent-delete" title="${t("delete.title") || "Ta bort"}">✕</button>`;
+    li.querySelector(".recent-delete").addEventListener("click", (e) => {
+      e.stopPropagation();
+      _showDeleteConfirm(r.folder, r.name);
+    });
     li.addEventListener("click", () => {
       document.querySelectorAll("#recent-list li").forEach(el => el.classList.remove("recent-selected"));
       li.classList.add("recent-selected");
       document.getElementById("open-folder").value = r.folder;
+      _checkEncrypted(r.folder);
     });
     list.appendChild(li);
   });
   // Pre-fill most recent
   document.getElementById("open-folder").value = res.recent[0].folder;
+  _checkEncrypted(res.recent[0].folder);
 }
 
 // ---- Native folder pickers ----
@@ -362,13 +369,16 @@ async function pickFolder(targetInputId) {
     const res = await GET("/api/pick-folder");
     folder = res.folder;
   }
-  if (folder) document.getElementById(targetInputId).value = folder;
+  if (folder) {
+    document.getElementById(targetInputId).value = folder;
+    if (targetInputId === "open-folder") _checkEncrypted(folder);
+  }
 }
 document.getElementById("btn-pick-open").addEventListener("click", () => pickFolder("open-folder"));
 document.getElementById("btn-pick-new").addEventListener("click",  () => pickFolder("new-folder"));
 
 // ---- Open ----
-["open-coder", "open-folder"].forEach(id => {
+["open-coder", "open-folder", "open-password"].forEach(id => {
   document.getElementById(id).addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); document.getElementById("btn-open").click(); }
   });
@@ -377,10 +387,20 @@ document.getElementById("btn-pick-new").addEventListener("click",  () => pickFol
 document.getElementById("btn-open").addEventListener("click", async () => {
   const folder = document.getElementById("open-folder").value.trim();
   const coder  = document.getElementById("open-coder").value.trim();
+  const password = document.getElementById("open-password").value || "";
   const errEl  = document.getElementById("splash-error");
   errEl.textContent = "";
   if (!folder || !coder) { errEl.textContent = t("error.fill.all"); return; }
-  const res = await POST("/api/project/open", { folder, coder });
+  const body = { folder, coder };
+  if (password) body.password = password;
+  const res = await POST("/api/project/open", body);
+  if (res.error === "encrypted" || res.error === "wrong_password") {
+    document.getElementById("open-password-section").classList.remove("hidden");
+    errEl.textContent = res.error === "encrypted"
+      ? t("error.password.required") : t("error.wrong.password");
+    document.getElementById("open-password").focus();
+    return;
+  }
   if (res.error) { errEl.textContent = res.error; return; }
   localStorage.setItem(CODER_KEY, coder);
   enterApp(res.project, coder, folder);
@@ -400,10 +420,141 @@ document.getElementById("btn-new").addEventListener("click", async () => {
   const errEl  = document.getElementById("splash-error");
   errEl.textContent = "";
   if (!folder || !name || !coder) { errEl.textContent = t("error.fill.all"); return; }
-  const res = await POST("/api/project/new", { folder, name, coder });
+
+  // Encryption
+  const encrypt = document.getElementById("new-encrypt").checked;
+  let password = "";
+  if (encrypt) {
+    const mode = document.querySelector('input[name="pw-mode"]:checked')?.value;
+    if (mode === "strong") {
+      password = document.getElementById("generated-passphrase").textContent.trim();
+    } else {
+      password = document.getElementById("new-password").value;
+      const confirm = document.getElementById("new-password-confirm").value;
+      if (!_validatePassword(password)) return;
+      if (password !== confirm) { errEl.textContent = t("pw.mismatch"); return; }
+    }
+    if (!password) { errEl.textContent = t("error.fill.all"); return; }
+  }
+
+  const body = { folder, name, coder };
+  if (password) body.password = password;
+  const res = await POST("/api/project/new", body);
   if (res.error) { errEl.textContent = res.error; return; }
   localStorage.setItem(CODER_KEY, coder);
   enterApp(res.project, coder, folder);
+});
+
+// ---- Encryption UI interactions ----
+document.getElementById("new-encrypt").addEventListener("change", (e) => {
+  document.getElementById("encrypt-options").classList.toggle("hidden", !e.target.checked);
+  if (e.target.checked) {
+    const mode = document.querySelector('input[name="pw-mode"]:checked')?.value;
+    if (mode === "strong") _fetchPassphrase();
+  }
+});
+
+document.querySelectorAll('input[name="pw-mode"]').forEach(r => {
+  r.addEventListener("change", () => {
+    const isStrong = r.value === "strong" && r.checked;
+    document.getElementById("pw-standard").classList.toggle("hidden", isStrong);
+    document.getElementById("pw-strong").classList.toggle("hidden", !isStrong);
+    if (isStrong) _fetchPassphrase();
+  });
+});
+
+async function _fetchPassphrase() {
+  const res = await GET("/api/crypto/generate-passphrase");
+  if (res.passphrase) {
+    document.getElementById("generated-passphrase").textContent = res.passphrase;
+  }
+}
+
+document.getElementById("btn-regen-passphrase").addEventListener("click", _fetchPassphrase);
+
+document.getElementById("btn-copy-passphrase").addEventListener("click", async () => {
+  const text = document.getElementById("generated-passphrase").textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    const btn = document.getElementById("btn-copy-passphrase");
+    const orig = btn.textContent;
+    btn.textContent = t("encrypt.copied");
+    setTimeout(() => { btn.textContent = orig; }, 1500);
+  } catch (e) { /* clipboard blocked */ }
+});
+
+// Password validation hints
+document.getElementById("new-password").addEventListener("input", (e) => {
+  _renderPwHints(e.target.value);
+});
+
+function _validatePassword(pw) {
+  const ok = pw.length >= 8 && /[A-Z]/.test(pw) && /[a-z]/.test(pw)
+    && /[0-9]/.test(pw) && /[^A-Za-z0-9]/.test(pw);
+  if (!ok) {
+    _renderPwHints(pw);
+  }
+  return ok;
+}
+
+function _renderPwHints(pw) {
+  const hints = document.getElementById("pw-hints");
+  const checks = [
+    { ok: pw.length >= 8, label: t("pw.hint.length") },
+    { ok: /[A-Z]/.test(pw), label: t("pw.hint.upper") },
+    { ok: /[a-z]/.test(pw), label: t("pw.hint.lower") },
+    { ok: /[0-9]/.test(pw), label: t("pw.hint.digit") },
+    { ok: /[^A-Za-z0-9]/.test(pw), label: t("pw.hint.special") },
+  ];
+  hints.innerHTML = checks.map(c =>
+    `<li class="${c.ok ? "ok" : "fail"}">${c.label}</li>`
+  ).join("");
+}
+
+// Check encryption when folder is selected for open
+async function _checkEncrypted(folder) {
+  if (!folder) return;
+  const res = await POST("/api/project/check-encrypted", { folder });
+  const section = document.getElementById("open-password-section");
+  if (res.encrypted) {
+    section.classList.remove("hidden");
+    document.getElementById("open-password").focus();
+  } else {
+    section.classList.add("hidden");
+    document.getElementById("open-password").value = "";
+  }
+}
+
+// ---- Delete project confirmation ----
+let _deleteFolder = null;
+
+function _showDeleteConfirm(folder, name) {
+  _deleteFolder = folder;
+  document.getElementById("delete-project-name").textContent = name + " (" + folder + ")";
+  document.getElementById("delete-confirm-check").checked = false;
+  document.getElementById("btn-delete-confirm").disabled = true;
+  const modal = document.getElementById("modal-delete-project");
+  modal.classList.remove("hidden");
+  applyTranslations();
+}
+
+document.getElementById("delete-confirm-check").addEventListener("change", (e) => {
+  document.getElementById("btn-delete-confirm").disabled = !e.target.checked;
+});
+
+document.getElementById("btn-delete-confirm").addEventListener("click", async () => {
+  if (!_deleteFolder) return;
+  const res = await POST("/api/project/delete", { folder: _deleteFolder });
+  _deleteFolder = null;
+  document.getElementById("modal-delete-project").classList.add("hidden");
+  if (res.ok || res.error) {
+    loadRecentProjects();
+  }
+});
+
+document.getElementById("btn-delete-cancel").addEventListener("click", () => {
+  _deleteFolder = null;
+  document.getElementById("modal-delete-project").classList.add("hidden");
 });
 
 function enterApp(proj, coder, folder) {
@@ -522,6 +673,9 @@ document.getElementById("btn-close-project").addEventListener("click", () => {
     document.getElementById("open-coder").value = savedCoder;
     document.getElementById("new-coder").value  = savedCoder;
   }
+  // Check if the pre-filled folder is encrypted
+  const folder = document.getElementById("open-folder").value.trim();
+  if (folder) _checkEncrypted(folder);
 });
 
 document.getElementById("btn-cancel-switch").addEventListener("click", async () => {
@@ -531,7 +685,17 @@ document.getElementById("btn-cancel-switch").addEventListener("click", async () 
   if (pre?.folder && pre?.coder) {
     const errEl = document.getElementById("splash-error");
     errEl.textContent = "";
-    const res = await POST("/api/project/open", { folder: pre.folder, coder: pre.coder });
+    const pw = document.getElementById("open-password").value || "";
+    const body = { folder: pre.folder, coder: pre.coder };
+    if (pw) body.password = pw;
+    const res = await POST("/api/project/open", body);
+    if (res.error === "encrypted" || res.error === "wrong_password") {
+      document.getElementById("open-password-section").classList.remove("hidden");
+      errEl.textContent = res.error === "encrypted"
+        ? t("error.password.required") : t("error.wrong.password");
+      document.getElementById("open-password").focus();
+      return;
+    }
     if (res.error) { errEl.textContent = res.error; return; }
     localStorage.setItem(CODER_KEY, pre.coder);
     enterApp(res.project, pre.coder, pre.folder);
@@ -546,6 +710,12 @@ function resetAllProjectState() {
   // --- Core data ---
   project = null; _currentFolder = null; _currentCoder = null;
   currentTid = null; currentText = ""; annotations = [];
+
+  // --- Encryption UI reset ---
+  document.getElementById("open-password-section")?.classList.add("hidden");
+  const openPw = document.getElementById("open-password");
+  if (openPw) openPw.value = "";
+  document.getElementById("splash-error").textContent = "";
 
   // --- Editor & formatting ---
   formattingSpans = [];

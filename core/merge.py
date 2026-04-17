@@ -4,6 +4,8 @@ When a collaborator sends their annotation JSON file(s), drop them into the
 project's annotations/ folder and call merge_coder() to import.
 Conflicts (overlapping spans, different codes) are flagged but not auto-resolved.
 """
+from __future__ import annotations
+
 import json
 import shutil
 from pathlib import Path
@@ -11,7 +13,7 @@ from pathlib import Path
 from .annotation import load_annotations, save_annotations, ANNOTATIONS_DIR
 
 
-def import_coder_file(folder: str, src_path: str) -> dict:
+def import_coder_file(folder: str, src_path: str, *, key: bytes | None = None) -> dict:
     """
     Import an external annotation JSON file into this project.
     Returns {"coder": str, "transcript_id": str, "imported": int, "skipped": int}
@@ -27,7 +29,7 @@ def import_coder_file(folder: str, src_path: str) -> dict:
     if not tid or not coder:
         raise ValueError("Invalid annotation file: missing transcript_id or coder.")
 
-    existing = load_annotations(folder, tid, coder)
+    existing = load_annotations(folder, tid, coder, key=key)
     existing_ids = {a["id"] for a in existing}
 
     added = 0
@@ -39,18 +41,18 @@ def import_coder_file(folder: str, src_path: str) -> dict:
             existing.append(ann)
             added += 1
 
-    save_annotations(folder, tid, coder, existing)
+    save_annotations(folder, tid, coder, existing, key=key)
     return {"coder": coder, "transcript_id": tid, "imported": added, "skipped": skipped}
 
 
-def detect_conflicts(folder: str, tid: str) -> list:
+def detect_conflicts(folder: str, tid: str, *, key: bytes | None = None) -> list:
     """
     Find overlapping spans between coders that have different codes assigned.
     Returns a list of conflict dicts.
     """
     from .annotation import load_all_coders
 
-    all_coders = load_all_coders(folder, tid)
+    all_coders = load_all_coders(folder, tid, key=key)
     if len(all_coders) < 2:
         return []
 

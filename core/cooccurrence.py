@@ -8,7 +8,7 @@ from __future__ import annotations
 from .annotation import load_all_coders
 
 
-def compute_cooccurrence(folder: str, project: dict) -> dict:
+def compute_cooccurrence(folder: str, project: dict, *, key: bytes | None = None) -> dict:
     """
     Returns:
       {
@@ -27,7 +27,7 @@ def compute_cooccurrence(folder: str, project: dict) -> dict:
 
     for t in transcripts:
         tid = t["id"]
-        all_coders = load_all_coders(folder, tid)
+        all_coders = load_all_coders(folder, tid, key=key)
 
         # Flatten all annotations across coders for this transcript
         all_anns = []

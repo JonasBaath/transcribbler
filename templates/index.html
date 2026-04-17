@@ -58,6 +58,12 @@
         <input type="text" id="open-coder"
           data-i18n-ph="open.coder.ph" placeholder="anna" />
       </label>
+      <div id="open-password-section" class="hidden">
+        <label><span data-i18n="open.password.label">Projektlösenord</span>
+          <input type="password" id="open-password"
+            data-i18n-ph="open.password.ph" placeholder="Ange lösenord" />
+        </label>
+      </div>
       <div class="open-btn-row">
         <button class="btn-primary" id="btn-open" data-i18n="btn.open">Öppna</button>
         <button class="btn-ghost hidden" id="btn-cancel-switch" data-i18n="btn.cancel">Avbryt</button>
@@ -81,6 +87,43 @@
         <input type="text" id="new-coder"
           data-i18n-ph="new.coder.ph" placeholder="anna" />
       </label>
+
+      <!-- Encryption options -->
+      <div id="encrypt-section">
+        <label class="encrypt-check-row">
+          <input type="checkbox" id="new-encrypt" />
+          <span data-i18n="encrypt.label">Kryptera projekt</span>
+        </label>
+        <div id="encrypt-options" class="hidden">
+          <div class="encrypt-radio-row">
+            <label><input type="radio" name="pw-mode" value="standard" checked />
+              <span data-i18n="encrypt.standard">Standardlösenord</span></label>
+            <label><input type="radio" name="pw-mode" value="strong" />
+              <span data-i18n="encrypt.strong">Stark lösenfras</span></label>
+          </div>
+          <div id="pw-standard">
+            <label><span data-i18n="encrypt.pw">Lösenord</span>
+              <input type="password" id="new-password"
+                data-i18n-ph="encrypt.pw.ph" placeholder="Minst 8 tecken" /></label>
+            <label><span data-i18n="encrypt.confirm">Bekräfta lösenord</span>
+              <input type="password" id="new-password-confirm"
+                data-i18n-ph="encrypt.confirm.ph" placeholder="Upprepa lösenord" /></label>
+            <ul id="pw-hints" class="pw-hints"></ul>
+          </div>
+          <div id="pw-strong" class="hidden">
+            <div class="passphrase-display">
+              <code id="generated-passphrase"></code>
+              <button type="button" class="btn-sm" id="btn-regen-passphrase"
+                data-i18n="encrypt.regen">Ny fras</button>
+              <button type="button" class="btn-sm" id="btn-copy-passphrase"
+                data-i18n="encrypt.copy">Kopiera</button>
+            </div>
+            <p class="encrypt-warning" data-i18n="encrypt.warning">
+              Spara lösenfrasen! Den kan inte återställas.</p>
+          </div>
+        </div>
+      </div>
+
       <button class="btn-primary" id="btn-new" data-i18n="btn.create">Skapa projekt</button>
     </div>
     <p id="splash-error" class="error-msg"></p>
@@ -359,6 +402,23 @@
     <div id="analysis-export-status" style="font-size:13px;margin:8px 0"></div>
     <div class="dialog-actions">
       <button class="btn-ghost" id="btn-analysis-export-close">Stäng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete project confirmation modal -->
+<div id="modal-delete-project" class="overlay hidden">
+  <div class="dialog">
+    <h2 data-i18n="delete.title">Ta bort projekt</h2>
+    <p id="delete-project-name" style="font-weight:600;margin-bottom:8px"></p>
+    <p data-i18n="delete.warning" style="color:var(--danger,#c0392b);margin-bottom:16px">Det här tar bort projektet permanent. Projektfilen, transkript och annoteringar raderas. Eventuella exporterade filer i mappen behålls.</p>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+      <input type="checkbox" id="delete-confirm-check" />
+      <span data-i18n="delete.confirm.check">Jag förstår att detta inte kan ångras</span>
+    </label>
+    <div class="dialog-actions">
+      <button class="btn-primary btn-danger" id="btn-delete-confirm" disabled data-i18n="delete.btn.confirm">Ta bort</button>
+      <button class="btn-ghost" id="btn-delete-cancel" data-i18n="btn.cancel">Avbryt</button>
     </div>
   </div>
 </div>
