@@ -43,6 +43,7 @@ def load_annotations(folder: str, tid: str, coder: str,
 def save_annotations(folder: str, tid: str, coder: str, annotations: list,
                      key: bytes | None = None):
     path = _ann_path(folder, tid, coder)
+    path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"transcript_id": tid, "coder": coder, "annotations": annotations}
     if key:
         from core.crypto import encrypt_json_file

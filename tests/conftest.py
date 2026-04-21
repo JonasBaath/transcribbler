@@ -10,9 +10,15 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 
-@pytest.fixture()
-def tmp_project(tmp_path):
-    """Return a minimal project structure (folder, project dict, transcripts dir)."""
+@pytest.fixture(scope="class")
+def tmp_project(tmp_path_factory):
+    """Return a minimal project structure (folder, project dict, transcripts dir).
+
+    Class-scoped so that step-chain tests (TestT1_… → test_step1, test_step2)
+    can share the same project state, which is how those suites are written.
+    Single-test classes still get a fresh directory per class.
+    """
+    tmp_path = tmp_path_factory.mktemp("project")
     (tmp_path / "transcripts").mkdir()
     project = {
         "name": "TestProject",
@@ -24,9 +30,13 @@ def tmp_project(tmp_path):
     return tmp_path, project
 
 
-@pytest.fixture()
+@pytest.fixture(scope="class")
 def flask_client(tmp_project):
-    """Flask test client with an active project loaded into STATE."""
+    """Flask test client with an active project loaded into STATE.
+
+    Class-scoped — shares STATE across tests in the same class so the
+    test_stepN_… chains in test_bug_scenarios work as authored.
+    """
     tmp_path, project = tmp_project
 
     # Patch STATE before importing app to avoid side-effects

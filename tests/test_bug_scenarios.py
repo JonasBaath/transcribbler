@@ -125,8 +125,8 @@ class TestT1_OverlappingAnnotationsAndSearch:
         text = "Kod <b>fetstil</b> och &amp; tecken i text"
         t = _add_transcript(flask_client, text_content=text)
         c = _add_code(flask_client, "HTMLtest")
-        a = _add_annotation(flask_client, t["id"], c["id"], 4, 22,
-                            text[4:22])
+        a = _add_annotation(flask_client, t["id"], c["id"], 4, 18,
+                            text[4:18])
         assert a["text"] == "<b>fetstil</b>"
 
     def test_step6_search_html_content(self, flask_client):
@@ -383,8 +383,9 @@ class TestT6_CodebookCountWithImagePins:
         r = flask_client.get("/api/export/codebook/csv")
         assert r.status_code == 200
         csv_text = r.data.decode("utf-8-sig")
-        # Find the BildKod row and check count
-        lines = csv_text.strip().split("\n")
+        # Find the BildKod row and check count. splitlines handles the CRLF
+        # terminators that csv.DictWriter emits.
+        lines = csv_text.strip().splitlines()
         header = lines[0]
         for line in lines[1:]:
             if "BildKod" in line:
