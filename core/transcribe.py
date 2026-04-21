@@ -140,18 +140,30 @@ def _convert_kb_whisper_to_ct2(output_dir: Path):
 
     Reads from the local HF cache (model must have been downloaded previously).
     Writes to output_dir (~1.4 GB). Takes ~30 seconds on an M-series Mac.
-    The result is cached; subsequent calls are instant because force=False skips
-    existing conversions.
+    Idempotent: a completed conversion is detected and skipped; a partial
+    conversion (output_dir exists but sentinel files are missing) is removed
+    before re-running so CTranslate2's "directory already exists" check passes.
     """
     import logging
+    import shutil
     _log = logging.getLogger("transcribbler")
+
+    if (output_dir / "model.bin").exists() and (output_dir / "config.json").exists():
+        _log.info("KB-Whisper CTranslate2 conversion already present → %s", output_dir)
+        return
+
+    if output_dir.exists():
+        _log.info("Removing partial KB-Whisper CTranslate2 directory %s before re-converting",
+                  output_dir)
+        shutil.rmtree(output_dir)
+
     _log.info("Converting KBLab/kb-whisper-large → CTranslate2/INT8 at %s (one-time, ~30 s)",
               output_dir)
     try:
         import ctranslate2
     except ImportError:
         raise ImportError("ctranslate2 is required. Run: pip install faster-whisper")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
     converter = ctranslate2.converters.TransformersConverter(
         "KBLab/kb-whisper-large",
         low_cpu_mem_usage=True,
