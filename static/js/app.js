@@ -5518,11 +5518,30 @@ async function doAnalysisExport(format) {
   const fnameBase = _analysisExportFilenameBase();
 
   if (format === "pdf") {
-    const prevTitle = document.title;
-    document.title = fnameBase;
-    window.print();
-    setTimeout(() => { document.title = prevTitle; }, 1000);
-    _closeAnalysisExportModal();
+    if (window.electronAPI && window.electronAPI.savePdf) {
+      statusEl.textContent = t("analysis.exporting");
+      try {
+        const r = await window.electronAPI.savePdf(fnameBase);
+        if (r && r.ok) {
+          statusEl.textContent = t("analysis.export.done");
+          _closeAnalysisExportModal();
+        } else if (r && r.error) {
+          statusEl.textContent = r.error;
+        } else {
+          // user canceled — leave modal open silently
+          statusEl.textContent = "";
+        }
+      } catch (e) {
+        statusEl.textContent = t("analysis.export.failed");
+      }
+    } else {
+      // Browser fallback: rely on document.title for filename hint
+      const prevTitle = document.title;
+      document.title = fnameBase;
+      window.print();
+      setTimeout(() => { document.title = prevTitle; }, 1000);
+      _closeAnalysisExportModal();
+    }
     return;
   }
 

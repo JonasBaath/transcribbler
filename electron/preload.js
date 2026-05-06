@@ -5,5 +5,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onMenuClick: (callback) => ipcRenderer.on('menu-click', (_event, btnId) => callback(btnId)),
   setMenuLang: (lang) => ipcRenderer.send('set-menu-lang', lang),
   titlebarDoubleClick: () => ipcRenderer.send('titlebar-double-click'),
+  savePdf: (defaultName) => ipcRenderer.invoke('save-pdf', defaultName),
   platform: process.platform,
 });

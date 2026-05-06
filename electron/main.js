@@ -294,6 +294,28 @@ ipcMain.handle('pick-folder', async (event) => {
   return result.canceled ? '' : result.filePaths[0];
 });
 
+// IPC: PDF export with explicit filename suggestion
+ipcMain.handle('save-pdf', async (event, defaultName) => {
+  const win = BrowserWindow.fromWebContents(event.sender);
+  const safeName = String(defaultName || 'analys').replace(/[\\/:*?"<>|]/g, '_').trim() || 'analys';
+  const result = await dialog.showSaveDialog(win, {
+    title: 'Spara PDF',
+    defaultPath: `${safeName}.pdf`,
+    filters: [{ name: 'PDF', extensions: ['pdf'] }],
+  });
+  if (result.canceled || !result.filePath) return { ok: false };
+  try {
+    const data = await event.sender.printToPDF({
+      printBackground: true,
+      pageSize: 'A4',
+    });
+    require('fs').writeFileSync(result.filePath, data);
+    return { ok: true, filePath: result.filePath };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+});
+
 function killFlaskProcess(proc) {
   if (!proc) return;
   const pid = proc.pid;
