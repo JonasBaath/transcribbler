@@ -1736,11 +1736,13 @@ async function loadTranscript(tid) {
   if (_hasSourceImg || _hasPhotos) {
     sourceBtn.classList.remove("hidden");
     sourceSep?.classList.remove("hidden");
-    // Restore per-transcript open/boxes state
+    // Restore per-transcript open/boxes state. Default = open (user requested
+    // images to be visible by default; only stay closed if explicitly closed).
     const imgState = _sourceImgState[tid];
-    if (imgState && imgState.open) {
+    const shouldOpen = !imgState || imgState.open !== false;
+    if (shouldOpen) {
       _openSourcePanel(tid, transcript);
-      _ocrBoxesVisible = imgState.boxesVisible || false;
+      _ocrBoxesVisible = (imgState && imgState.boxesVisible) || false;
       document.getElementById("btn-ocr-boxes")?.classList.toggle("active", _ocrBoxesVisible);
       if (_ocrBoxesVisible && _hasSourceImg) loadOcrBoxes(tid);
     }
