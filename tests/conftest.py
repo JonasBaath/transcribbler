@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import tempfile
+from pathlib import Path
 
 import pytest
 
@@ -31,7 +32,7 @@ def tmp_project(tmp_path_factory):
 
 
 @pytest.fixture(scope="class")
-def flask_client(tmp_project):
+def flask_client(tmp_project, tmp_path_factory):
     """Flask test client with an active project loaded into STATE.
 
     Class-scoped — shares STATE across tests in the same class so the
@@ -45,11 +46,17 @@ def flask_client(tmp_project):
     main.STATE["project"] = project
     main.STATE["coder"] = "testare"
 
+    # Redirect recent-projects file so tests don't pollute ~/.transcribbler_recent.json
+    fake_recent = tmp_path_factory.mktemp("recent") / "recent.json"
+    original_recent = main.RECENT_FILE
+    main.RECENT_FILE = fake_recent
+
     main.app.config["TESTING"] = True
     with main.app.test_client() as client:
         yield client
 
     # Cleanup
+    main.RECENT_FILE = original_recent
     main.STATE["folder"] = None
     main.STATE["project"] = None
     main.STATE["coder"] = None

@@ -36,7 +36,7 @@ def export_analysis_md(project, excerpts, mode="separate"):
         for e in g["excerpts"]:
             label = e.get("transcript_label", "")
             name = e.get("transcript_name", "")
-            anchor = " 📌" if e.get("anchor") else ""
+            anchor = " ◆" if e.get("anchor") else ""
             lines.append(f"**{label}. {name}** _(kodare: {e['coder']})_{anchor}")
             lines.append(f"> {e['text']}\n")
             if e.get("memo"):
@@ -92,7 +92,7 @@ def export_analysis_docx(project, excerpts, mode="separate"):
         for e in g["excerpts"]:
             label = e.get("transcript_label", "")
             name = e.get("transcript_name", "")
-            anchor = " 📌" if e.get("anchor") else ""
+            anchor = " ◆" if e.get("anchor") else ""
             p = doc.add_paragraph()
             run = p.add_run(f"{label}. {name} (kodare: {e['coder']}){anchor}")
             run.bold = True
@@ -150,7 +150,7 @@ def export_analysis_odt(project, excerpts, mode="separate"):
         for e in g["excerpts"]:
             label = e.get("transcript_label", "")
             name = e.get("transcript_name", "")
-            anchor = " 📌" if e.get("anchor") else ""
+            anchor = " ◆" if e.get("anchor") else ""
             p = P()
             s = Span(stylename=bold_style)
             s.addText(f"{label}. {name} (kodare: {e['coder']}){anchor}")

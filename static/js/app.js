@@ -20,7 +20,7 @@ function _appDialog({ message, title, mode, defaultValue = "" }) {
       resolve(window.confirm(message)); return;
     }
     msgEl.textContent = message;
-    titleEl.textContent = title || (mode === "alert" ? "Meddelande" : "Bekräfta");
+    titleEl.textContent = title || (mode === "alert" ? t("modal.alert.title") : t("modal.confirm.title"));
 
     // Inject/remove an input for prompt mode
     let input = modal.querySelector("#confirm-modal-input");
@@ -846,7 +846,7 @@ function renderTranscriptList() {
     if (tr.id === currentTid) li.classList.add("active");
     if (selectedTids.has(tr.id)) li.classList.add("selected");
     const prefix = transOrderEnabled ? `<span class="trans-label">${transLabel(idx)}.</span> ` : "";
-    li.innerHTML = `<span class="drag-handle" title="Dra för att ordna om">⋮⋮</span><span class="trans-name">${prefix}${esc(tr.name)}</span><span class="trans-del" title="Ta bort">✕</span>`;
+    li.innerHTML = `<span class="drag-handle" title="${esc(t("tooltip.drag.reorder"))}">⋮⋮</span><span class="trans-name">${prefix}${esc(tr.name)}</span><span class="trans-del" title="${esc(t("tooltip.transcript.delete"))}">✕</span>`;
 
     // Only allow HTML5 drag when initiated from the drag handle
     const handle = li.querySelector(".drag-handle");
@@ -977,7 +977,7 @@ function resetTranscriptModal() {
   document.getElementById("trans-name").value = "";
   document.getElementById("trans-file").value = "";
   document.getElementById("file-selected-list").innerHTML = "";
-  document.getElementById("file-drop-text").textContent = "Klicka för att välja fil, eller dra hit";
+  document.getElementById("file-drop-text").textContent = t("trans.drop.text");
   document.getElementById("btn-trans-confirm").disabled = false;
   document.getElementById("audio-options")?.classList.add("hidden");
   document.getElementById("scribbler-options")?.classList.add("hidden");
@@ -1060,7 +1060,7 @@ function updateFileList(files) {
   const dropText = document.getElementById("file-drop-text");
   list.innerHTML = "";
   if (!files || files.length === 0) {
-    dropText.textContent = "Klicka för att välja fil, eller dra hit";
+    dropText.textContent = t("trans.drop.text");
     document.getElementById("audio-options").classList.add("hidden");
     document.getElementById("scribbler-options").classList.add("hidden");
     document.getElementById("image-options")?.classList.add("hidden");
@@ -1102,15 +1102,15 @@ function isScribblerFile(name) {
 }
 
 // --- Progress bar helper ---
-const STAGE_LABELS = {
-  "pending":      "Förbereder…",
-  "loading_model":"Laddar modell…",
-  "diarizing":    "Identifierar talare…",
-  "diarizing_cpu":"Identifierar talare (CPU — kan ta lång tid)…",
-  "transcribing": "Whisper transkriberar…",
-  "ocr":          "Tolkar text i bild…",
-  "saving":       "Sparar…",
-  "done":         "Klart!",
+const STAGE_KEYS = {
+  "pending":       "progress.preparing",
+  "loading_model": "progress.loading",
+  "diarizing":     "progress.diarizing",
+  "diarizing_cpu": "progress.diarizing.cpu",
+  "transcribing":  "progress.transcribing",
+  "ocr":           "progress.ocr",
+  "saving":        "progress.saving",
+  "done":          "progress.done",
 };
 function updateProgressBar(progress, stage, extra) {
   const wrap = document.getElementById("trans-progress-wrap");
@@ -1122,8 +1122,9 @@ function updateProgressBar(progress, stage, extra) {
   if (stage === "diarizing" && extra && extra.diar_device === "cpu") {
     displayStage = "diarizing_cpu";
   }
+  const key = STAGE_KEYS[displayStage];
   document.getElementById("trans-progress-stage").textContent =
-    STAGE_LABELS[displayStage] || stage || "Arbetar…";
+    key ? t(key) : (stage || t("progress.working"));
 }
 
 // --- Job polling ---
@@ -1131,7 +1132,7 @@ function pollJob(jobId, onDone, onError) {
   GET(`/api/jobs/${jobId}`).then(res => {
     updateProgressBar(res.progress || 0, res.stage || "", {diar_device: res.diar_device});
     if (res.status === "done") { onDone(res); return; }
-    if (res.status === "error") { onError(res.error || "Okänt fel"); return; }
+    if (res.status === "error") { onError(res.error || t("error.unknown")); return; }
     setTimeout(() => pollJob(jobId, onDone, onError), 2000);
   }).catch(err => onError(String(err)));
 }
@@ -1202,7 +1203,7 @@ document.getElementById("btn-trans-confirm").addEventListener("click", async () 
     }
     if (isScribblerFile(file.name)) {
       const pw = document.getElementById("scribbler-password")?.value || "";
-      if (!pw) { errEl.textContent = t("error.scribbler.no_password") || "Ange lösenord för .scribbler-filen."; document.getElementById("btn-trans-confirm").disabled = false; return; }
+      if (!pw) { errEl.textContent = t("error.scribbler.no_password"); document.getElementById("btn-trans-confirm").disabled = false; return; }
       formData.append("scribbler_password", pw);
     }
 
@@ -1225,7 +1226,7 @@ document.getElementById("btn-trans-confirm").addEventListener("click", async () 
         // hela uppladdningen är klar (möjliggör obevakad körning över natten).
         audioIdx++;
         const _audN = audioIdx;
-        const prefix = audioFiles.length > 1 ? `Fil ${_audN}/${audioFiles.length} — ` : "";
+        const prefix = audioFiles.length > 1 ? `${t("progress.prefix.file")} ${_audN}/${audioFiles.length} — ` : "";
         try {
           const jobRes = await new Promise((resolve, reject) => {
             function poll() {
@@ -1233,12 +1234,13 @@ document.getElementById("btn-trans-confirm").addEventListener("click", async () 
               GET(`/api/jobs/${data.job_id}`).then(res => {
                 if (_transcriptAborted) { reject("aborted"); return; }
                 const pct = Math.round((res.progress || 0) * 100);
-                const stageLabel = STAGE_LABELS[res.stage] || res.stage || "Arbetar…";
+                const sk = STAGE_KEYS[res.stage];
+                const stageLabel = sk ? t(sk) : (res.stage || t("progress.working"));
                 updateProgressBar(res.progress || 0, "");
                 document.getElementById("trans-progress-stage").textContent = prefix + stageLabel;
                 document.getElementById("trans-progress-pct").textContent = `${pct}%`;
                 if (res.status === "done")  { resolve(res); return; }
-                if (res.status === "error") { reject(res.error || "Okänt fel"); return; }
+                if (res.status === "error") { reject(res.error || t("error.unknown")); return; }
                 setTimeout(poll, 2000);
               }).catch(err => reject(String(err)));
             }
@@ -1265,17 +1267,18 @@ document.getElementById("btn-trans-confirm").addEventListener("click", async () 
       // Bild-OCR — vänta sekventiellt så att nästa fil kan startas efteråt
       try {
         const _imgN = imageIdx; // capture current index for closure
-        const prefix = imageFiles.length > 1 ? `Bild ${_imgN}/${imageFiles.length} — ` : "";
+        const prefix = imageFiles.length > 1 ? `${t("progress.prefix.image")} ${_imgN}/${imageFiles.length} — ` : "";
         const jobRes = await new Promise((resolve, reject) => {
           function poll() {
             GET(`/api/jobs/${data.job_id}`).then(res => {
               const pct = Math.round((res.progress || 0) * 100);
-              const stageLabel = STAGE_LABELS[res.stage] || res.stage || "Arbetar…";
+              const sk = STAGE_KEYS[res.stage];
+              const stageLabel = sk ? t(sk) : (res.stage || t("progress.working"));
               updateProgressBar(res.progress || 0, "");
               document.getElementById("trans-progress-stage").textContent = prefix + stageLabel;
               document.getElementById("trans-progress-pct").textContent = `${pct}%`;
               if (res.status === "done") { resolve(res); return; }
-              if (res.status === "error") { reject(res.error || "Okänt fel"); return; }
+              if (res.status === "error") { reject(res.error || t("error.unknown")); return; }
               setTimeout(poll, 2000);
             }).catch(err => reject(String(err)));
           }
@@ -1387,7 +1390,7 @@ document.getElementById("btn-voice-cancel")?.addEventListener("click", () => {
 });
 
 document.getElementById("btn-voice-delete")?.addEventListener("click", async () => {
-  if (!await appConfirm("Ta bort röstprofil?")) return;
+  if (!await appConfirm(t("voice.confirm.delete"))) return;
   const res = await DEL("/api/voice-profile");
   if (res.ok) {
     _voiceProfileMeta = null;
@@ -1401,7 +1404,7 @@ document.getElementById("btn-voice-extract")?.addEventListener("click", async ()
   const errEl = document.getElementById("voice-modal-error");
   const progress = document.getElementById("voice-extract-progress");
 
-  if (!fileInput.files.length) { errEl.textContent = "Välj en ljudfil först."; return; }
+  if (!fileInput.files.length) { errEl.textContent = t("voice.error.no.audio"); return; }
   errEl.textContent = "";
   progress.classList.remove("hidden");
   document.getElementById("btn-voice-extract").disabled = true;
@@ -1423,7 +1426,7 @@ document.getElementById("btn-voice-extract")?.addEventListener("click", async ()
       document.getElementById("voice-profile-status-box").classList.remove("hidden");
     }
   } catch (e) {
-    errEl.textContent = "Nätverksfel: " + e;
+    errEl.textContent = t("error.network", { msg: String(e) });
   } finally {
     progress.classList.add("hidden");
     document.getElementById("btn-voice-extract").disabled = false;
@@ -1601,11 +1604,9 @@ async function commitBatchSpeakers(speakerMaps) {
   // speakerMaps: array of {jobId, name, speakers: {SPEAKER_XX: "Name", ...}}
   const errEl = document.getElementById("batch-spk-error");
   const progEl = document.getElementById("batch-spk-progress");
-  const curEl  = document.getElementById("batch-spk-cur");
-  const totEl  = document.getElementById("batch-spk-total");
+  const labelEl = document.getElementById("batch-spk-progress-label");
   errEl.textContent = "";
-  totEl.textContent = String(speakerMaps.length);
-  curEl.textContent = "0";
+  labelEl.textContent = t("batch.spk.progress.label", { cur: 0, total: speakerMaps.length });
   progEl.classList.remove("hidden");
 
   // Disable buttons during commit
@@ -1614,7 +1615,7 @@ async function commitBatchSpeakers(speakerMaps) {
 
   const failed = [];
   for (let i = 0; i < speakerMaps.length; i++) {
-    curEl.textContent = String(i + 1);
+    labelEl.textContent = t("batch.spk.progress.label", { cur: i + 1, total: speakerMaps.length });
     const { jobId, name, speakers } = speakerMaps[i];
     try {
       const res = await POST(`/api/transcripts/commit/${jobId}`, { name, speakers });
@@ -1632,7 +1633,7 @@ async function commitBatchSpeakers(speakerMaps) {
   document.getElementById("btn-batch-spk-skip").disabled = false;
 
   if (failed.length > 0) {
-    errEl.textContent = `${failed.length} fil(er) misslyckades: ${failed.map(f => f.name).join(", ")}. Försök igen för att retry:a.`;
+    errEl.textContent = t("uploads.failed.format", { n: failed.length, names: failed.map(f => f.name).join(", ") });
     // Keep _audioBatch only with the failed entries so the user can retry
     _audioBatch = failed.map(f => _audioBatch[f.idx]);
     progEl.classList.add("hidden");
@@ -1698,6 +1699,7 @@ async function loadTranscript(tid) {
         segmentCharMap = buildSegmentCharMap(segments);
         const txtEl = document.getElementById("transcript-text");
         txtEl.classList.add("has-audio");
+        txtEl.dataset.i18nTitle = "play.here";
         txtEl.title = t("play.here");
       }
     }).catch(() => {});
@@ -1866,8 +1868,8 @@ function _openSourcePanel(tid, transcript) {
 
   const titleEl = document.getElementById("source-panel-title");
   if (titleEl) {
-    titleEl.textContent = hasSourceImg && photos.length > 0 ? "Källbild & foton"
-                        : photos.length > 0 ? "Foton" : "Källbild";
+    titleEl.textContent = hasSourceImg && photos.length > 0 ? t("source.panel.image.photos")
+                        : photos.length > 0 ? t("source.panel.photos") : t("source.panel.image");
   }
   document.getElementById("btn-ocr-boxes")?.classList.toggle("hidden", !hasSourceImg);
   const ocrPhotosBtn = document.getElementById("btn-ocr-photos");
@@ -2042,15 +2044,22 @@ document.getElementById("btn-ocr-photos")?.addEventListener("click", async () =>
   if (!currentTid) return;
   const btn = document.getElementById("btn-ocr-photos");
   btn.disabled = true;
-  btn.title = "Kör OCR…";
+  btn.dataset.i18nTitle = "progress.ocr.running";
+  btn.title = t("progress.ocr.running");
   try {
     const res = await POST(`/api/transcripts/${currentTid}/ocr-photos`, {});
-    if (res.error) { await appAlert(res.error); btn.disabled = false; btn.title = "Extrahera text från foton (OCR)"; return; }
+    if (res.error) {
+      await appAlert(res.error);
+      btn.disabled = false;
+      btn.dataset.i18nTitle = "tooltip.ocr.photos";
+      btn.title = t("tooltip.ocr.photos");
+      return;
+    }
     await new Promise((resolve, reject) => {
       function poll() {
         GET(`/api/jobs/${res.job_id}`).then(j => {
           if (j.status === "done") { resolve(j.result); return; }
-          if (j.status === "error") { reject(j.error || "Okänt fel"); return; }
+          if (j.status === "error") { reject(j.error || t("error.unknown")); return; }
           setTimeout(poll, 1500);
         }).catch(reject);
       }
@@ -2063,10 +2072,11 @@ document.getElementById("btn-ocr-photos")?.addEventListener("click", async () =>
       renderTranscriptText();
     }
   } catch (e) {
-    await appAlert("OCR misslyckades: " + e);
+    await appAlert(t("error.ocr.failed", { msg: String(e) }));
   } finally {
     btn.disabled = false;
-    btn.title = "Extrahera text från foton (OCR)";
+    btn.dataset.i18nTitle = "tooltip.ocr.photos";
+    btn.title = t("tooltip.ocr.photos");
   }
 });
 document.getElementById("btn-ocr-boxes")?.addEventListener("click", () => {
@@ -2110,7 +2120,7 @@ document.getElementById("btn-text-save")?.addEventListener("click", async () => 
   if (!currentTid) return;
   const newText = document.getElementById("text-edit-area").value;
   if (annotations.length > 0) {
-    const ok = await appConfirm("Det finns " + annotations.length + " kodning(ar) på detta transkript. Om du ändrar texten kan deras positioner bli felaktiga. Fortsätta ändå?");
+    const ok = await appConfirm(t("transcript.edit.warning", { n: annotations.length }));
     if (!ok) return;
   }
   const res = await PATCH(`/api/transcripts/${currentTid}/text`, { text: newText });
@@ -2505,7 +2515,7 @@ document.getElementById("btn-ann-confirm").addEventListener("click", async () =>
           updateAnnBadge();
           _refreshCodebookManagerIfOpen();
         }
-        appAlert(`Kunde inte byta kod: ${res.error || "okänt fel"}`);
+        appAlert(t("error.change.code", { error: res.error || t("error.unknown") }));
       }
     });
     return;
@@ -2537,6 +2547,7 @@ document.getElementById("btn-ann-confirm").addEventListener("click", async () =>
   const res = await POST(`/api/transcripts/${currentTid}/annotations`, body);
   if (res.ok) {
     annotations.push(res.annotation);
+    _markCodeAsRecentlyUsed(selected.dataset.codeId);
     updateAnnBadge();
     if (res.annotation.kind === "point") {
       renderPointPins();
@@ -2546,7 +2557,7 @@ document.getElementById("btn-ann-confirm").addEventListener("click", async () =>
     pushUndo({ type: "add", tid: currentTid, ann: res.annotation });
     redoStack = [];
   } else {
-    await appAlert(`Kunde inte spara kodning: ${res.error || "okänt fel"}`);
+    await appAlert(t("error.save.annotation", { error: res.error || t("error.unknown") }));
   }
   hideAnnPopup();
 });
@@ -2628,7 +2639,8 @@ function showAnnDetail(annId, posOverride) {
   const code = (project.codes || []).find(c => c.id === ann.code_id);
   const codeEl = document.getElementById("ann-detail-code");
   codeEl.textContent = code ? `${buildPath(project.codes, ann.code_id)}` : ann.code_id;
-  codeEl.title = t("ann.change.code") || "Klicka för att byta kod";
+  codeEl.dataset.i18nTitle = "ann.change.code";
+  codeEl.title = t("ann.change.code");
   codeEl.style.cursor = "pointer";
   document.getElementById("ann-detail-memo").value = ann.memo || "";
   // Weight
@@ -2790,7 +2802,7 @@ function openCodeModal(code, prefillName) {
 
   // Build parent select
   const sel = document.getElementById("code-parent");
-  sel.innerHTML = `<option value="">— ingen (toppnivå) —</option>`;
+  sel.innerHTML = `<option value="">${esc(t("code.parent.none"))}</option>`;
   buildFlatList(project.codes || []).forEach(c => {
     if (code && c.id === code.id) return; // Can't be own parent
     const opt = document.createElement("option");
@@ -2828,7 +2840,7 @@ document.getElementById("btn-code-confirm").addEventListener("click", async () =
   const desc   = document.getElementById("code-description").value.trim();
   const errEl  = document.getElementById("code-error");
   errEl.textContent = "";
-  if (!name) { errEl.textContent = "Namn krävs."; return; }
+  if (!name) { errEl.textContent = t("error.code.name.required"); return; }
 
   // Snapshot existing code IDs so we can identify the newly created code below.
   const prevIds = new Set((project && project.codes ? project.codes : []).map(c => c.id));
@@ -2879,7 +2891,7 @@ document.getElementById("btn-code-delete").addEventListener("click", async () =>
   if (res.ok) {
     project = res.project;
     renderCodebook();
-    if (currentTid) renderTranscriptText();
+    if (currentTid) await loadTranscript(currentTid);
     document.getElementById("modal-code").classList.add("hidden");
     _refreshCodebookManagerIfOpen();
   }
@@ -2977,7 +2989,7 @@ document.getElementById("btn-merge-confirm").addEventListener("click", async () 
     document.getElementById("merge-error").textContent = res.error;
   } else {
     document.getElementById("merge-result").textContent =
-      `Importerade ${res.imported} kodningar från ${res.coder} (${res.skipped} redan fanns).`;
+      t("import.merge.success", { imported: res.imported, coder: res.coder, skipped: res.skipped });
     // Reload if current transcript was affected
     if (currentTid && res.transcript_id === currentTid) loadTranscript(currentTid);
   }
@@ -3386,7 +3398,7 @@ async function openStats() {
 function renderStats(data) {
   const body = document.getElementById("stats-body");
   if (!data.rows || data.rows.length === 0) {
-    body.innerHTML = "<p style='color:var(--text-dim);margin-top:12px'>Inga kodningar ännu.</p>";
+    body.innerHTML = `<p style='color:var(--text-dim);margin-top:12px'>${esc(t("empty.coding"))}</p>`;
     return;
   }
   const maxCount = Math.max(...data.rows.map(r => r.count));
@@ -3672,7 +3684,8 @@ function applyFormatSpans() {
         const el = document.createElement(span.type === "bold" ? "strong" : "em");
         el.className = "fmt-span";
         el.dataset.fmtId = span.id;
-        el.title = "Klicka för att ta bort formatering";
+        el.dataset.i18nTitle = "tooltip.remove.formatting";
+        el.title = t("tooltip.remove.formatting");
         el.addEventListener("click", ev => {
           ev.stopPropagation();
           removeFmtSpan(span.id);
@@ -3800,7 +3813,8 @@ function initColorPalette() {
   moreBtn.addEventListener("click", () => {
     const showing = extended.style.display !== "none";
     extended.style.display = showing ? "none" : "";
-    moreBtn.textContent = showing ? "Visa fler ▾" : "Visa färre ▴";
+    moreBtn.dataset.i18n = showing ? "palette.more.show" : "palette.more.hide";
+    moreBtn.textContent = t(moreBtn.dataset.i18n);
   });
   document.getElementById("code-parent").addEventListener("change", updateParentShades);
 }
@@ -3929,17 +3943,15 @@ async function confirmMergeCodes() {
   const targetId = document.getElementById("merge-target").value;
   const statusEl = document.getElementById("merge-status");
   if (sourceId === targetId) {
-    statusEl.textContent = "Källkod och målkod kan inte vara samma.";
+    statusEl.textContent = t("merge.same.error");
     return;
   }
   const sourceName = document.getElementById("merge-source").selectedOptions[0]?.textContent || sourceId;
   const targetName = document.getElementById("merge-target").selectedOptions[0]?.textContent || targetId;
-  if (!await appConfirm(
-    `Alla kodningar från "${sourceName}" flyttas till "${targetName}". Källkoden "${sourceName}" tas bort permanent. Fortsätta?`
-  )) return;
+  if (!await appConfirm(t("merge.confirm.text", { src: sourceName, tgt: targetName }))) return;
   const btn = document.getElementById("btn-merge-codes-confirm");
   btn.disabled = true;
-  statusEl.textContent = "Slår ihop…";
+  statusEl.textContent = t("merge.status.merging");
   const res = await POST("/api/codes/merge", { source_id: sourceId, target_id: targetId });
   btn.disabled = false;
   if (res.ok) {
@@ -3953,7 +3965,7 @@ async function confirmMergeCodes() {
     }
     openCodebookManager();
   } else {
-    statusEl.textContent = res.error || "Något gick fel.";
+    statusEl.textContent = res.error || t("error.something.wrong");
   }
 }
 
@@ -4006,11 +4018,13 @@ function renderCodebookManager(counts, anchors = {}) {
     const count = counts[node.id] || 0;
     const badge = document.createElement("span");
     badge.className = "cb-mgr-count";
+    badge.dataset.i18nTitle = "code.ann.count";
     badge.title = t("code.ann.count");
     badge.textContent = count > 0 ? count : "—";
 
     const editBtn = document.createElement("button");
     editBtn.className = "code-edit-btn";
+    editBtn.dataset.i18nTitle = "code.edit.title";
     editBtn.title = t("code.edit.title");
     editBtn.textContent = "✎";
     editBtn.addEventListener("click", () => {
@@ -4024,7 +4038,7 @@ function renderCodebookManager(counts, anchors = {}) {
       const pin = document.createElement("span");
       pin.className = "cb-mgr-anchor";
       pin.title = anchors[node.id].text || t("ann.anchor.label");
-      pin.textContent = "📌";
+      pin.textContent = "◆";
       row.appendChild(pin);
     }
     row.appendChild(badge);
@@ -4144,25 +4158,30 @@ async function runProjectSearch() {
   const summaryEl = document.getElementById("proj-search-summary");
   const resultsEl = document.getElementById("proj-search-results");
   summaryEl.textContent = "";
-  resultsEl.innerHTML = `<div class="proj-search-loading">Söker…</div>`;
+  resultsEl.innerHTML = `<div class="proj-search-loading">${esc(t("proj.search.loading"))}</div>`;
 
   const res = await GET(`/api/search?q=${encodeURIComponent(q)}`);
 
   if (!res.results) {
-    resultsEl.innerHTML = `<div class="proj-search-empty">Något gick fel.</div>`;
+    resultsEl.innerHTML = `<div class="proj-search-empty">${esc(t("error.something.wrong"))}</div>`;
     return;
   }
 
   if (res.total_matches === 0) {
-    summaryEl.textContent = `Inga träffar för "${q}"`;
-    resultsEl.innerHTML = `<div class="proj-search-empty">Inga träffar hittades.</div>`;
+    summaryEl.textContent = t("proj.search.no.matches.q", { q });
+    resultsEl.innerHTML = `<div class="proj-search-empty">${esc(t("proj.search.empty"))}</div>`;
     return;
   }
 
-  const tPlural = res.results.length === 1 ? "transkript" : "transkript";
-  const mPlural = res.total_matches === 1 ? "träff" : "träffar";
-  summaryEl.textContent =
-    `${res.total_matches} ${mPlural} i ${res.results.length} ${tPlural}`;
+  const tPlural = res.results.length === 1
+    ? t("proj.search.transcript.singular")
+    : t("proj.search.transcript.plural");
+  const mPlural = res.total_matches === 1
+    ? t("proj.search.match.singular")
+    : t("proj.search.match.plural");
+  summaryEl.textContent = t("proj.search.summary", {
+    m: res.total_matches, mPlural, t: res.results.length, tPlural,
+  });
 
   resultsEl.innerHTML = "";
   const SHOW_LIMIT = 5;
@@ -4174,7 +4193,9 @@ async function runProjectSearch() {
     // Header
     const header = document.createElement("div");
     header.className = "proj-search-group-header";
-    const matchWord = group.matches.length === 1 ? "träff" : "träffar";
+    const matchWord = group.matches.length === 1
+      ? t("proj.search.match.singular")
+      : t("proj.search.match.plural");
     header.innerHTML =
       `<span class="proj-search-chevron">▼</span>` +
       `<span class="proj-search-group-name">${esc(group.name)}</span>` +
@@ -4194,7 +4215,7 @@ async function runProjectSearch() {
     if (hidden.length > 0) {
       const moreEl = document.createElement("div");
       moreEl.className = "proj-search-more";
-      moreEl.textContent = `+${hidden.length} till`;
+      moreEl.textContent = t("proj.search.more", { n: hidden.length });
       moreEl.addEventListener("click", () => {
         for (const match of hidden)
           snippetWrap.insertBefore(_makeSnippetEl(match, q, group.tid), moreEl);
@@ -4225,13 +4246,13 @@ function renderCodeTree() {
 
   const titleEl = document.createElement("div");
   titleEl.className = "codetree-title";
-  titleEl.textContent = project ? project.name : "Kodbok";
+  titleEl.textContent = project ? project.name : t("codetree.title.fallback");
   content.appendChild(titleEl);
 
   if (!tree.length) {
     const empty = document.createElement("p");
     empty.style.cssText = "color:var(--text-dim);padding:16px";
-    empty.textContent = "Inga koder ännu.";
+    empty.textContent = t("empty.codes");
     content.appendChild(empty);
     return;
   }
@@ -4310,6 +4331,23 @@ function _buildNumberedFlat() {
   return flat;
 }
 
+function _recentCodesKey() {
+  const projId = (project && (project.id || project.name)) || "default";
+  return `transcribbler.recentCodes.${projId}`;
+}
+function _getRecentCodeIds() {
+  try {
+    const raw = localStorage.getItem(_recentCodesKey());
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) { return []; }
+}
+function _markCodeAsRecentlyUsed(codeId) {
+  if (!codeId) return;
+  const list = _getRecentCodeIds().filter(id => id !== codeId);
+  list.unshift(codeId);
+  try { localStorage.setItem(_recentCodesKey(), JSON.stringify(list.slice(0, 5))); } catch (e) {}
+}
+
 function setupAnnSearch() {
   const searchInput = document.getElementById("ann-search");
   const list        = document.getElementById("ann-code-list");
@@ -4321,12 +4359,30 @@ function setupAnnSearch() {
     const q = (query || "").toLowerCase().trim();
     list.innerHTML = "";
 
-    const filtered = q
-      ? flat.filter(c => {
-          const fullPath = [...c.ancestors, c.name].join(" ").toLowerCase();
-          return fullPath.includes(q);
-        })
-      : flat;
+    let filtered;
+    if (q) {
+      filtered = flat.filter(c => {
+        const fullPath = [...c.ancestors, c.name].join(" ").toLowerCase();
+        return fullPath.includes(q);
+      });
+    } else if (flat.length > 5) {
+      // No query + many codes: show only 5 most recently used
+      const recentIds = _getRecentCodeIds();
+      const byId = {};
+      flat.forEach(c => { byId[c.id] = c; });
+      const recent = recentIds.map(id => byId[id]).filter(Boolean).slice(0, 5);
+      // If we have <5 recent, fill from top of flat list (alphabetical / tree order)
+      if (recent.length < 5) {
+        const seen = new Set(recent.map(c => c.id));
+        for (const c of flat) {
+          if (recent.length >= 5) break;
+          if (!seen.has(c.id)) recent.push(c);
+        }
+      }
+      filtered = recent;
+    } else {
+      filtered = flat;
+    }
 
     filtered.forEach(code => {
       const div = document.createElement("div");
@@ -4415,23 +4471,17 @@ document.addEventListener("click", e => {
     if (info.gpu && info.gpu !== "none") {
       lines.push(`GPU: ${info.gpu.toUpperCase()}`);
     }
-    if (info.disk_free_gb) lines.push(`${currentLang === "sv" ? "Disk ledig" : "Disk free"}: ${info.disk_free_gb} GB`);
+    if (info.disk_free_gb) lines.push(`${t("sys.disk.free")}: ${info.disk_free_gb} GB`);
 
     const warns = info.warnings || [];
     if (warns.includes("no_gpu")) {
-      lines.push(`<span class="sys-warn">${currentLang === "sv"
-        ? "Ingen GPU — diarisering kommer köras på CPU (långsamt)"
-        : "No GPU — diarization will run on CPU (slow)"}</span>`);
+      lines.push(`<span class="sys-warn">${esc(t("warn.no.gpu"))}</span>`);
     }
     if (warns.includes("low_ram")) {
-      lines.push(`<span class="sys-warn">${currentLang === "sv"
-        ? "Lite RAM — transkription kan bli långsam"
-        : "Low RAM — transcription may be slow"}</span>`);
+      lines.push(`<span class="sys-warn">${esc(t("warn.low.ram"))}</span>`);
     }
     if (warns.includes("low_disk")) {
-      lines.push(`<span class="sys-warn">${currentLang === "sv"
-        ? "Lite diskutrymme — ML-modeller kräver ~2 GB"
-        : "Low disk space — ML models require ~2 GB"}</span>`);
+      lines.push(`<span class="sys-warn">${esc(t("warn.low.disk"))}</span>`);
     }
 
     box.innerHTML = lines.join("<br>");
@@ -4594,14 +4644,14 @@ async function openCodeMatrix() {
   closeAllDropdowns();
   document.getElementById("modal-code-matrix").classList.remove("hidden");
   const wrap = document.getElementById("code-matrix-wrap");
-  wrap.innerHTML = "<p style='padding:12px;color:var(--text-dim)'>Laddar…</p>";
+  wrap.innerHTML = `<p style='padding:12px;color:var(--text-dim)'>${esc(t("common.loading"))}</p>`;
   const data = await GET("/api/code-matrix");
   renderCodeMatrix(data, wrap);
 }
 
 function renderCodeMatrix(data, wrap) {
   if (!data.codes || data.codes.length === 0) {
-    wrap.innerHTML = "<p style='padding:12px;color:var(--text-dim)'>Inga annoteringar ännu.</p>";
+    wrap.innerHTML = `<p style='padding:12px;color:var(--text-dim)'>${esc(t("empty.annotations"))}</p>`;
     return;
   }
   const table = document.createElement("table");
@@ -4665,14 +4715,14 @@ async function openCooccurrence() {
   closeAllDropdowns();
   document.getElementById("modal-cooccurrence").classList.remove("hidden");
   const wrap = document.getElementById("cooccurrence-wrap");
-  wrap.innerHTML = "<p style='padding:12px;color:var(--text-dim)'>Laddar…</p>";
+  wrap.innerHTML = `<p style='padding:12px;color:var(--text-dim)'>${esc(t("common.loading"))}</p>`;
   const data = await GET("/api/cooccurrence");
   renderCooccurrence(data, wrap);
 }
 
 function renderCooccurrence(data, wrap) {
   if (!data.codes || data.codes.length === 0) {
-    wrap.innerHTML = "<p style='padding:12px;color:var(--text-dim)'>Inga kodsamförekomster ännu.</p>";
+    wrap.innerHTML = `<p style='padding:12px;color:var(--text-dim)'>${esc(t("empty.cooccurrence"))}</p>`;
     return;
   }
   const codes  = data.codes;
@@ -5089,11 +5139,11 @@ function renderAnalysisContent() {
   _updateAnalysisExportButton();
 
   if (_analysisState.selectedCodes.size === 0) {
-    container.innerHTML = '<div class="analysis-empty">Välj koder i kodboken till vänster för att visa utdrag.</div>';
+    container.innerHTML = `<div class="analysis-empty">${esc(t("analysis.empty"))}</div>`;
     return;
   }
   if (excerpts.length === 0) {
-    container.innerHTML = '<div class="analysis-empty">Inga utdrag matchar filtren.</div>';
+    container.innerHTML = `<div class="analysis-empty">${esc(t("analysis.no.match"))}</div>`;
     return;
   }
 
@@ -5117,7 +5167,7 @@ function _createExcerptCard(e, showMemos, exportMode, searchQ) {
   if (e.anchor) {
     const pin = document.createElement("span");
     pin.className = "anchor-icon";
-    pin.textContent = "📌";
+    pin.textContent = "◆";
     header.appendChild(pin);
   }
   const label = document.createElement("span");
@@ -5452,12 +5502,27 @@ document.querySelectorAll(".analysis-fmt-btn").forEach(btn => {
   btn.addEventListener("click", () => doAnalysisExport(btn.dataset.format));
 });
 
+function _analysisExportFilenameBase() {
+  const name = (project && project.name) ? project.name : "analys";
+  const safe = name.replace(/[\\/:*?"<>|]/g, "_").trim() || "analys";
+  return `${safe}_analys`;
+}
+
+function _closeAnalysisExportModal() {
+  document.getElementById("modal-analysis-export").classList.add("hidden");
+}
+
 async function doAnalysisExport(format) {
   const statusEl = document.getElementById("analysis-export-status");
   const exportType = document.querySelector('input[name="analysis-export-type"]:checked')?.value || "codes";
+  const fnameBase = _analysisExportFilenameBase();
 
   if (format === "pdf") {
+    const prevTitle = document.title;
+    document.title = fnameBase;
     window.print();
+    setTimeout(() => { document.title = prevTitle; }, 1000);
+    _closeAnalysisExportModal();
     return;
   }
 
@@ -5487,21 +5552,22 @@ async function doAnalysisExport(format) {
       el.style.maxHeight = prevHeight;
       el.style.overflow = prevOverflow;
       const link = document.createElement("a");
-      link.download = "analys.png";
+      link.download = `${fnameBase}.png`;
       link.href = canvas.toDataURL("image/png");
       link.click();
-      statusEl.textContent = "PNG exporterad.";
+      statusEl.textContent = t("analysis.png.exported");
+      _closeAnalysisExportModal();
     } catch (e) {
       const el2 = document.getElementById("analysis-content");
       el2.classList.remove("png-export-ready");
       el2.style.maxHeight = "";
       el2.style.overflow = "";
-      statusEl.textContent = "Kunde inte generera PNG.";
+      statusEl.textContent = t("analysis.png.error");
     }
     return;
   }
 
-  statusEl.textContent = "Exporterar…";
+  statusEl.textContent = t("analysis.exporting");
   const body = {
     format,
     mode: _analysisState.displayMode,
@@ -5529,7 +5595,7 @@ async function doAnalysisExport(format) {
     });
     if (!res.ok) {
       const err = await res.json();
-      statusEl.textContent = err.error || "Export misslyckades.";
+      statusEl.textContent = err.error || t("analysis.export.failed");
       return;
     }
     const blob = await res.blob();
@@ -5537,12 +5603,13 @@ async function doAnalysisExport(format) {
     const link = document.createElement("a");
     const cd = res.headers.get("content-disposition") || "";
     const fnMatch = cd.match(/filename=(.+)/);
-    link.download = fnMatch ? fnMatch[1] : `analys.${format}`;
+    link.download = fnMatch ? fnMatch[1] : `${fnameBase}.${format}`;
     link.href = url;
     link.click();
     URL.revokeObjectURL(url);
-    statusEl.textContent = "Export klar.";
+    statusEl.textContent = t("analysis.export.done");
+    _closeAnalysisExportModal();
   } catch (e) {
-    statusEl.textContent = "Export misslyckades.";
+    statusEl.textContent = t("analysis.export.failed");
   }
 }

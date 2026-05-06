@@ -98,7 +98,7 @@ const menuLabels = {
   sv: {
     about: 'Om transcribbler', hide: 'Göm transcribbler', hideOthers: 'Göm övriga',
     showAll: 'Visa alla', quit: 'Avsluta transcribbler',
-    file: 'Arkiv', close: 'Stäng fönster', quit: 'Avsluta',
+    file: 'Arkiv', importItem: 'Importera...', close: 'Stäng fönster', quit: 'Avsluta',
     edit: 'Redigera', undo: 'Ångra', redo: 'Gör om', cut: 'Klipp ut',
     copy: 'Kopiera', paste: 'Klistra in', selectAll: 'Markera allt',
     tools: 'Verktyg', stats: 'Statistik', irr: 'IRR', codebook: 'Kodbok',
@@ -108,11 +108,14 @@ const menuLabels = {
     devTools: 'Utvecklarverktyg', fullscreen: 'Helskärm',
     window: 'Fönster', minimize: 'Minimera', zoom: 'Zooma', front: 'Flytta till främsta',
     help: 'Hjälp', github: 'Transcribbler på GitHub',
+    folderPickerTitle: 'Välj projektmapp',
+    flaskErrorTitle: 'Transcribbler',
+    flaskErrorBody: 'Kunde inte starta Flask-servern.\nKontrollera att Python och beroenden är installerade.',
   },
   en: {
     about: 'About transcribbler', hide: 'Hide transcribbler', hideOthers: 'Hide Others',
     showAll: 'Show All', quit: 'Quit transcribbler',
-    file: 'File', close: 'Close Window', quit: 'Quit',
+    file: 'File', importItem: 'Import...', close: 'Close Window', quit: 'Quit',
     edit: 'Edit', undo: 'Undo', redo: 'Redo', cut: 'Cut',
     copy: 'Copy', paste: 'Paste', selectAll: 'Select All',
     tools: 'Tools', stats: 'Statistics', irr: 'IRR', codebook: 'Codebook',
@@ -122,12 +125,21 @@ const menuLabels = {
     devTools: 'Developer Tools', fullscreen: 'Full Screen',
     window: 'Window', minimize: 'Minimize', zoom: 'Zoom', front: 'Bring All to Front',
     help: 'Help', github: 'Transcribbler on GitHub',
+    folderPickerTitle: 'Choose project folder',
+    flaskErrorTitle: 'Transcribbler',
+    flaskErrorBody: 'Could not start the Flask server.\nMake sure Python and dependencies are installed.',
   },
 };
 
+let currentLang = 'sv';
+function getLabels() {
+  return menuLabels[currentLang] || menuLabels.sv;
+}
+
 function buildMenu(lang = 'sv') {
+  currentLang = (lang === 'en') ? 'en' : 'sv';
   const isMac = process.platform === 'darwin';
-  const L = menuLabels[lang] || menuLabels.sv;
+  const L = menuLabels[currentLang];
 
   function clickButton(id) {
     const focused = BrowserWindow.getFocusedWindow();
@@ -156,8 +168,16 @@ function buildMenu(lang = 'sv') {
   template.push({
     label: L.file,
     submenu: isMac
-      ? [{ label: L.close, role: 'close', accelerator: 'CmdOrCtrl+W' }]
-      : [{ label: L.quit,  role: 'quit',  accelerator: 'Alt+F4' }],
+      ? [
+          { label: L.importItem, click: () => clickButton('btn-add-transcript'), accelerator: 'CmdOrCtrl+I' },
+          { type: 'separator' },
+          { label: L.close, role: 'close', accelerator: 'CmdOrCtrl+W' },
+        ]
+      : [
+          { label: L.importItem, click: () => clickButton('btn-add-transcript'), accelerator: 'CmdOrCtrl+I' },
+          { type: 'separator' },
+          { label: L.quit,  role: 'quit',  accelerator: 'Alt+F4' },
+        ],
   });
 
   template.push({
@@ -269,7 +289,7 @@ ipcMain.handle('pick-folder', async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   const result = await dialog.showOpenDialog(win, {
     properties: ['openDirectory'],
-    title: 'Välj projektmapp',
+    title: getLabels().folderPickerTitle,
   });
   return result.canceled ? '' : result.filePaths[0];
 });
@@ -302,10 +322,8 @@ async function launchInstance() {
   try {
     await waitForFlask(port);
   } catch {
-    dialog.showErrorBox(
-      'Transcribbler',
-      'Kunde inte starta Flask-servern.\nKontrollera att Python och beroenden är installerade.'
-    );
+    const L = getLabels();
+    dialog.showErrorBox(L.flaskErrorTitle, L.flaskErrorBody);
     killFlaskProcess(flask);
     if (instances.length === 0) app.quit();
     return;

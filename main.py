@@ -115,16 +115,29 @@ def _save_config(cfg: dict):
 
 
 def _load_recent() -> list:
+    import tempfile
+    _tmpdir = Path(tempfile.gettempdir()).resolve()
     if not RECENT_FILE.exists():
         return []
     try:
         with open(RECENT_FILE, encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
     except Exception:
         return []
+    def _keep(r):
+        p = Path(r.get("folder", ""))
+        return p.is_dir() and not p.resolve().is_relative_to(_tmpdir)
+    existing = [r for r in data if _keep(r)]
+    if len(existing) != len(data):
+        with open(RECENT_FILE, "w", encoding="utf-8") as f:
+            json.dump(existing, f, ensure_ascii=False, indent=2)
+    return existing
 
 
 def _save_recent(folder: str, project_name: str):
+    import tempfile
+    if Path(folder).resolve().is_relative_to(Path(tempfile.gettempdir()).resolve()):
+        return
     recent = [r for r in _load_recent() if r["folder"] != folder]
     recent.insert(0, {"folder": folder, "name": project_name})
     recent = recent[:MAX_RECENT]
