@@ -584,15 +584,14 @@ def upload_transcript():
         if not run_ocr:
             # --- Sync path: store image without OCR ---
             try:
-                import shutil
                 tid = str(uuid.uuid4())[:8]
                 img_name = name or original_stem
-                dest_name = f"{tid}_source{ext}"
-                dest = Path(STATE["folder"]) / "transcripts" / dest_name
-                shutil.copy2(tmp.name, dest)
+                # add_image_transcript copies the source into the project folder
+                # itself; passing the temp path avoids a duplicate copy that
+                # earlier hit shutil.SameFileError.
                 updated = proj_mod.add_image_transcript(
                     STATE["folder"], STATE["project"], tid, img_name,
-                    str(dest), "", key=_key(),
+                    tmp.name, "", key=_key(),
                 )
                 STATE["project"] = updated
                 return jsonify({"ok": True, "project": updated})
