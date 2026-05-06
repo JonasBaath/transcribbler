@@ -1,0 +1,5 @@
+project,transcript,transcript_category,coder,code,parent_code,code_path,code_color,start,end,text_length,text,memo,weight,anchor,created
+betatest2404,test,,Jonas,Kos A,,Kos A,#CC79A7,0,8,8,Testtext,,50,FALSE,2026-04-24T22:17:20
+betatest2404,test,,Jonas,Positiv,Kos A,Kos A > Positiv,#dfaac7,3,8,5,ttext,,50,FALSE,2026-04-24T22:17:52
+betatest2404,test,,Jonas,Kod B,,Kod B,#0072B2,13,23,10, docx-fil.,,50,FALSE,2026-04-24T22:18:14
+betatest2404,test,,Jonas,Positiv,Kos A,Kos A > Positiv,#dfaac7,9,13,4,fran,udw,50,TRUE,2026-04-24T22:21:08

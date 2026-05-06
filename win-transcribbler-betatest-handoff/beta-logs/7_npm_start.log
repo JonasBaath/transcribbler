@@ -1,0 +1,24 @@
+
+> transcribbler@0.1.0 start
+> electron .
+
+
+[flask:53917] Transcribbler k�rs p� http://127.0.0.1:53917
+ * Serving Flask app 'main'
+ * Debug mode: off
+[flask:53917] 2026-04-25 09:29:35,941 ERROR transcribbler: IRR calculation failed
+Traceback (most recent call last):
+  File "C:\Users\jobh0003\transcribbler\main.py", line 1613, in get_irr
+    result = cohens_kappa(STATE["folder"], STATE["project"], tid, coder_a, coder_b)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jobh0003\transcribbler\core\irr.py", line 25, in cohens_kappa
+    text = get_transcript_text(folder, t, key=key)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jobh0003\transcribbler\core\project.py", line 384, in get_transcript_text
+    return path.read_text(encoding="utf-8")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jobh0003\AppData\Local\Programs\Python\Python311\Lib\pathlib.py", line 1059, in read_text
+    return f.read()
+           ^^^^^^^^
+  File "<frozen codecs>", line 322, in decode
+UnicodeDecodeError: 'utf-8' codec can't decode byte 0x97 in position 4: invalid start byte

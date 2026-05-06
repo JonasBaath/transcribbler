@@ -1,0 +1,37 @@
+FAS 2.7 EXPORT — 2026-04-25 09:25
+==================================
+Drift-väg: API direkt (UI/IPC ej testad — folder-picker-observation utelämnad).
+Project: betatest2404 (krypterat med "Test123!"), öppnat som coder=betatestare.
+
+POST /api/export/to-folder
+  formats: csv_tidy, csv, md_codes, md_codebook, qdpx
+  folder:  C:\Users\jobh0003\Desktop\transcribbler-export
+  -> {"ok":true,"errors":[],"written":[5 files]}
+
+Filer:
+  annoteringar_tidy_betatest2404_2026-04-25_0925.csv  546 B  (tidy: 4 rader)
+  annoteringar_betatest2404_2026-04-25_0925.csv       324 B  (4 rader)
+  citat_per_kod_betatest2404_2026-04-25_0925.md       289 B
+  kodbok_betatest2404_2026-04-25_0925.md              146 B
+  projekt_betatest2404_2026-04-25_0925.qdpx          1664 B
+
+Verifiering:
+  CSV tidy  - alla 4 annoteringar med ankare-flagga, weight=50, parent_code/code_path korrekt.
+  CSV       - 4 rader, theme_path stämmer ("Kos A > Positiv").
+  Citat MD  - hierarkisk gruppering, memo "udw" bevarat, ankare-span "fran" listad separat.
+  Kodbok MD - räkning {Kos A:1, Positiv:2, Kod B:1, Kod C:0, Kod CC:0}. OK.
+  QDPX ZIP  - giltig zip, project.qde (3027 B) + 3 sources (.txt). Se observation #6.
+
+Observationer (nya, lägga till observations.md):
+  6. QDPX innehåller bara 3 sources/*.txt men projektet har 4 transkript
+     (en av dem .docx — c6c5edaa.docx). Bara .txt-versionen av c6c5edaa
+     bifogas i QDPX. Avsiktligt (REFI-QDA = ren text)? eller bug?
+  7. project.modified=2026-04-24T22:18:58 men en annotering har
+     created=22:21:08. Annotering bumpar inte project.modified.
+  8. Coder-fält i export: alla rader visar "Jonas" (rätt — annoteringarnas
+     skapare). STATE["coder"]=betatestare har inte påverkat befintliga
+     annoteringar. Förväntat.
+
+Inte täckt i denna runda:
+  - Folder-picker (native vs web dialog) — kräver UI-drift.
+  - md_transcript-format — skippades (kräver tid-arg, inte standard-massexport).

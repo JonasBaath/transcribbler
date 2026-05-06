@@ -35,7 +35,7 @@
         <button class="tab-btn" data-tab="new" data-i18n="tab.new">Nytt projekt</button>
       </div>
       <div style="display:flex;gap:4px">
-        <button class="btn-sm" id="btn-theme-splash" title="Byt tema">☀</button>
+        <button class="btn-sm" id="btn-theme-splash" data-i18n-title="tooltip.theme" title="Byt tema">☀</button>
         <button class="btn-sm lang-toggle" id="btn-lang-splash">EN</button>
       </div>
     </div>
@@ -156,14 +156,14 @@
     <span id="project-title">transcribbler</span>
     <span id="coder-badge"></span>
     <div id="view-toggle" class="view-toggle">
-      <button class="view-toggle-btn active" id="btn-view-coding">Kodningsvy</button>
-      <button class="view-toggle-btn" id="btn-view-analysis">Analysvy</button>
+      <button class="view-toggle-btn active" id="btn-view-coding" data-i18n="view.coding">Kodningsvy</button>
+      <button class="view-toggle-btn" id="btn-view-analysis" data-i18n="view.analysis">Analysvy</button>
     </div>
     <div class="topbar-actions">
       <span class="topbar-spacer"></span>
       <!-- Settings popover -->
       <div class="popover-wrap" id="settings-wrap">
-        <button class="btn-sm" id="btn-settings" title="Inställningar">⚙</button>
+        <button class="btn-sm" id="btn-settings" data-i18n-title="tooltip.settings" title="Inställningar">⚙</button>
         <div id="settings-popover" class="settings-popover hidden">
           <label class="settings-row">
             <input type="checkbox" id="setting-numbering" />
@@ -207,7 +207,7 @@
       </div>
       <button class="btn-sm" id="btn-project-search" data-i18n="btn.project.search">Projektsök</button>
       <button class="btn-sm" id="btn-lang">EN</button>
-      <button class="btn-sm" id="btn-theme" title="Byt tema">☀</button>
+      <button class="btn-sm" id="btn-theme" data-i18n-title="tooltip.theme" title="Byt tema">☀</button>
       <button class="btn-sm btn-ghost" id="btn-close-project"
         data-i18n="btn.switch.project">Byt projekt</button>
     </div>
@@ -220,7 +220,8 @@
       <div class="sidebar-header">
         <span data-i18n="sidebar.transcripts">Transkript</span>
         <button class="btn-sidebar-import" id="btn-add-transcript"
-          data-i18n="btn.import" title="Importera transkript">Import</button>
+          data-i18n="btn.import" data-i18n-title="tooltip.import.transcript"
+          title="Importera transkript">Import</button>
       </div>
       <ul id="transcript-list"></ul>
     </aside>
@@ -234,9 +235,9 @@
         <div id="search-bar" class="hidden">
           <input type="text" id="search-input" data-i18n-ph="search.ph" placeholder="Sök i transkript…" />
           <span id="search-count"></span>
-          <button class="btn-sm" id="btn-search-prev" title="Föregående (Shift+Enter)">↑</button>
-          <button class="btn-sm" id="btn-search-next" title="Nästa (Enter)">↓</button>
-          <button class="btn-sm btn-ghost" id="btn-search-clear" title="Stäng (Esc)">✕</button>
+          <button class="btn-sm" id="btn-search-prev" data-i18n-title="tooltip.search.prev" title="Föregående (Shift+Enter)">↑</button>
+          <button class="btn-sm" id="btn-search-next" data-i18n-title="tooltip.search.next" title="Nästa (Enter)">↓</button>
+          <button class="btn-sm btn-ghost" id="btn-search-clear" data-i18n-title="tooltip.search.clear" title="Stäng (Esc)">✕</button>
         </div>
 
         <div id="editor-placeholder">
@@ -245,7 +246,7 @@
         <div id="editor-content" class="hidden">
           <div id="editor-meta">
             <span id="editor-title"></span>
-            <button class="btn-icon btn-rename-transcript" id="btn-rename-transcript" title="Byt namn">✎</button>
+            <button class="btn-icon btn-rename-transcript" id="btn-rename-transcript" data-i18n-title="tooltip.rename.transcript" title="Byt namn">✎</button>
             <span id="ann-count-badge"></span>
           </div>
 
@@ -253,15 +254,15 @@
           <div id="audio-player-wrap" class="hidden">
             <audio id="audio-player" controls preload="metadata"></audio>
             <div id="waveform-controls" class="hidden">
-              <button id="wf-play-pause" title="Spela/Pausa">▶</button>
+              <button id="wf-play-pause" data-i18n-title="tooltip.audio.play.pause" title="Spela/Pausa">▶</button>
               <span id="wf-time">0:00 / 0:00</span>
-              <input id="wf-volume" type="range" min="0" max="1" step="0.05" value="1" title="Volym">
+              <input id="wf-volume" type="range" min="0" max="1" step="0.05" value="1" data-i18n-title="tooltip.audio.volume" title="Volym">
               <div id="waveform-zoom">
-                <button id="waveform-zoom-out" title="Zooma ut">−</button>
-                <button id="waveform-zoom-in"  title="Zooma in">+</button>
+                <button id="waveform-zoom-out" data-i18n-title="tooltip.audio.zoom.out" title="Zooma ut">−</button>
+                <button id="waveform-zoom-in"  data-i18n-title="tooltip.audio.zoom.in" title="Zooma in">+</button>
               </div>
-              <label id="wf-space-toggle" title="Mellanslag spelar/pausar">
-                <input type="checkbox" id="wf-space-enabled" checked> Spacebar play/pause
+              <label id="wf-space-toggle" data-i18n-title="tooltip.audio.spacebar" title="Mellanslag spelar/pausar">
+                <input type="checkbox" id="wf-space-enabled" checked> <span data-i18n="audio.spacebar.toggle">Mellanslag spelar/pausar</span>
               </label>
             </div>
             <span id="audio-model-badge"></span>
@@ -274,26 +275,26 @@
 
           <!-- Format toolbar -->
           <div id="editor-toolbar" class="hidden">
-            <button class="fmt-btn" id="fmt-a-minus" title="Minska teckenstorlek">A−</button>
-            <button class="fmt-btn" id="fmt-a-plus" title="Öka teckenstorlek">A+</button>
+            <button class="fmt-btn" id="fmt-a-minus" data-i18n-title="tooltip.font.smaller" title="Minska teckenstorlek">A−</button>
+            <button class="fmt-btn" id="fmt-a-plus" data-i18n-title="tooltip.font.bigger" title="Öka teckenstorlek">A+</button>
             <span class="fmt-sep"></span>
-            <button class="fmt-btn" id="fmt-sans" title="Sans-serif">Sans</button>
-            <button class="fmt-btn" id="fmt-serif" title="Serif">Serif</button>
+            <button class="fmt-btn" id="fmt-sans" data-i18n-title="tooltip.font.sans" title="Sans-serif">Sans</button>
+            <button class="fmt-btn" id="fmt-serif" data-i18n-title="tooltip.font.serif" title="Serif">Serif</button>
             <span class="fmt-sep"></span>
-            <button class="fmt-btn" id="fmt-bold" title="Fetstil (markera text först)"><b>B</b></button>
-            <button class="fmt-btn" id="fmt-italic" title="Kursiv (markera text först)"><i>I</i></button>
+            <button class="fmt-btn" id="fmt-bold" data-i18n-title="tooltip.font.bold" title="Fetstil (markera text först)"><b>B</b></button>
+            <button class="fmt-btn" id="fmt-italic" data-i18n-title="tooltip.font.italic" title="Kursiv (markera text först)"><i>I</i></button>
             <span class="fmt-sep" id="fmt-sep-source"></span>
-            <button class="fmt-btn hidden" id="btn-source-img" title="Visa källbild">🖼</button>
+            <button class="fmt-btn hidden" id="btn-source-img" data-i18n-title="tooltip.source.image" title="Visa källbild">🖼</button>
             <span class="fmt-sep"></span>
-            <button class="fmt-btn" id="btn-edit-text" title="Redigera text">✎</button>
+            <button class="fmt-btn" id="btn-edit-text" data-i18n-title="tooltip.edit.text" title="Redigera text">✎</button>
           </div>
 
           <div id="transcript-text"></div>
           <div id="text-edit-wrap" class="hidden">
             <textarea id="text-edit-area" spellcheck="false"></textarea>
             <div class="text-edit-actions">
-              <button class="btn-primary btn-sm" id="btn-text-save">Spara</button>
-              <button class="btn-ghost btn-sm" id="btn-text-cancel">Avbryt</button>
+              <button class="btn-primary btn-sm" id="btn-text-save" data-i18n="btn.save">Spara</button>
+              <button class="btn-ghost btn-sm" id="btn-text-cancel" data-i18n="btn.cancel">Avbryt</button>
             </div>
           </div>
         </div>
@@ -305,11 +306,11 @@
       <!-- Source image panel (shown for image-sourced transcripts and/or notes with photos) -->
       <div id="source-img-panel" class="hidden">
         <div class="source-img-hdr">
-          <span id="source-panel-title">Källbild</span>
-          <button class="btn-sm btn-ghost" id="btn-ocr-photos" title="Extrahera text från foton (OCR)" style="display:none">⊙</button>
-          <button class="btn-sm btn-ghost" id="btn-ocr-boxes" title="Visa igenkänd text">⊞</button>
-          <button class="btn-sm btn-ghost" id="btn-pin-mode" title="Placera kodpins" data-i18n-title="btn.pin.mode">📍</button>
-          <button class="btn-sm btn-ghost" id="btn-close-source">✕</button>
+          <span id="source-panel-title" data-i18n="source.panel.image">Källbild</span>
+          <button class="btn-sm btn-ghost" id="btn-ocr-photos" data-i18n-title="tooltip.ocr.photos" title="Extrahera text från foton (OCR)" style="display:none">⊙</button>
+          <button class="btn-sm btn-ghost" id="btn-ocr-boxes" data-i18n-title="tooltip.ocr.boxes" title="Visa igenkänd text">⊞</button>
+          <button class="btn-sm btn-ghost" id="btn-pin-mode" data-i18n-title="tooltip.pin.mode" title="Placera kodpins">📍</button>
+          <button class="btn-sm btn-ghost" id="btn-close-source" data-i18n-title="tooltip.close.source" title="Stäng">✕</button>
         </div>
         <div class="source-img-scroll">
           <div id="source-img-wrap">
@@ -343,10 +344,10 @@
     <div id="analysis-view" class="hidden">
       <aside id="analysis-codebook">
         <div class="sidebar-header">
-          <span>Kodbok</span>
+          <span data-i18n="sidebar.codebook">Kodbok</span>
           <div style="display:flex;gap:4px">
-            <button class="btn-sm" id="btn-analysis-all">Alla</button>
-            <button class="btn-sm" id="btn-analysis-none">Inga</button>
+            <button class="btn-sm" id="btn-analysis-all" data-i18n="analysis.select.all">Alla</button>
+            <button class="btn-sm" id="btn-analysis-none" data-i18n="analysis.select.none">Inga</button>
           </div>
         </div>
         <div id="analysis-codebook-tree"></div>
@@ -354,21 +355,21 @@
       <main id="analysis-main">
         <div id="analysis-toolbar">
           <div class="analysis-toolbar-group">
-            <label class="inline-label"><input type="radio" name="analysis-display" value="separate" checked /> Separat</label>
-            <label class="inline-label"><input type="radio" name="analysis-display" value="code_in_code" /> Kod-i-kod</label>
+            <label class="inline-label"><input type="radio" name="analysis-display" value="separate" checked /> <span data-i18n="analysis.mode.separate">Separat</span></label>
+            <label class="inline-label"><input type="radio" name="analysis-display" value="code_in_code" /> <span data-i18n="analysis.mode.nested">Kod-i-kod</span></label>
           </div>
           <div class="analysis-toolbar-group">
-            <input type="text" id="analysis-search" placeholder="Sök i utdrag…" class="analysis-search-input" />
+            <input type="text" id="analysis-search" data-i18n-ph="analysis.search.ph" placeholder="Sök i utdrag…" class="analysis-search-input" />
           </div>
           <div class="analysis-toolbar-group">
-            <label class="inline-label"><input type="checkbox" id="analysis-show-memos" /> Memos</label>
-            <label class="inline-label"><input type="checkbox" id="analysis-anchor-only" /> Nyckelpassage</label>
+            <label class="inline-label"><input type="checkbox" id="analysis-show-memos" /> <span data-i18n="analysis.show.memos">Memos</span></label>
+            <label class="inline-label"><input type="checkbox" id="analysis-anchor-only" /> <span data-i18n="analysis.anchor.only">Nyckelpassage</span></label>
           </div>
           <div class="analysis-toolbar-group">
-            <label class="inline-label" data-i18n-title="analysis.export.mode.tooltip" title="Aktivera för att välja enskilda citat att exportera"><input type="checkbox" id="analysis-export-mode" /> Exportläge</label>
+            <label class="inline-label" data-i18n-title="analysis.export.mode.tooltip" title="Aktivera för att välja enskilda citat att exportera"><input type="checkbox" id="analysis-export-mode" /> <span data-i18n="analysis.export.mode">Exportväljare</span></label>
           </div>
           <div class="analysis-toolbar-group analysis-toolbar-export">
-            <button class="btn-sm btn-primary" id="btn-analysis-export">Exportera</button>
+            <button class="btn-sm btn-primary" id="btn-analysis-export" data-i18n="btn.export">Exportera</button>
           </div>
         </div>
         <div id="analysis-content"></div>
@@ -384,12 +385,12 @@
 <!-- Analysis export modal -->
 <div id="modal-analysis-export" class="overlay hidden">
   <div class="dialog">
-    <h2>Exportera analys</h2>
+    <h2 data-i18n="analysis.export.title">Exportera analys</h2>
     <div class="export-field-group" id="analysis-export-type-group">
       <label class="settings-row"><input type="radio" name="analysis-export-type" value="codes" checked /> <span data-i18n="analysis.export.codes">Exportera valda koder</span></label>
       <label class="settings-row"><input type="radio" name="analysis-export-type" value="excerpts" /> <span data-i18n="analysis.export.excerpts">Exportera markerade citat</span></label>
-      <label class="settings-row"><input type="radio" name="analysis-export-type" value="all" /> <span data-i18n="analysis.export.all">Exportera allt</span></label>
       <label class="settings-row"><input type="radio" name="analysis-export-type" value="key" /> <span data-i18n="analysis.export.key">Exportera nyckelpassager</span></label>
+      <label class="settings-row"><input type="radio" name="analysis-export-type" value="all" /> <span data-i18n="analysis.export.all">Exportera allt</span></label>
     </div>
     <div class="export-field-group" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
       <button class="btn-sm analysis-fmt-btn" data-format="docx">DOCX</button>
@@ -401,7 +402,7 @@
     </div>
     <div id="analysis-export-status" style="font-size:13px;margin:8px 0"></div>
     <div class="dialog-actions">
-      <button class="btn-ghost" id="btn-analysis-export-close">Stäng</button>
+      <button class="btn-ghost" id="btn-analysis-export-close" data-i18n="btn.close">Stäng</button>
     </div>
   </div>
 </div>
@@ -555,10 +556,10 @@
                 <span data-i18n="diar.seg.label">Segmenteringströskel</span>
                 <span class="tip-icon">i</span>
                 <div class="tip-box">
-                  Hur känslig modellen är för svagt ljud.<br>
-                  <b>↑ Högre</b>: renare, ignorerar mummel<br>
-                  <b>↓ Lägre</b>: plockar upp mer, risk för brus<br><br>
-                  <i>Tumregel: börja på 0,50 och höj om du får för många korta segment.</i>
+                  <span data-i18n="tip.diar.seg.title">Hur känslig modellen är för svagt ljud.</span><br>
+                  <b>↑ </b><span data-i18n="tip.diar.seg.high">Högre: renare, ignorerar mummel</span><br>
+                  <b>↓ </b><span data-i18n="tip.diar.seg.low">Lägre: plockar upp mer, risk för brus</span><br><br>
+                  <i data-i18n="tip.diar.seg.rule">Tumregel: börja på 0,50 och höj om du får för många korta segment.</i>
                 </div>
               </div>
               <input type="range" id="diar-seg-thr" min="0.10" max="0.90" step="0.05" value="0.50" />
@@ -569,10 +570,10 @@
                 <span data-i18n="diar.clu.label">Klustringsttröskel</span>
                 <span class="tip-icon">i</span>
                 <div class="tip-box">
-                  Hur lika röster måste vara för att räknas som samma talare.<br>
-                  <b>↑ Höj</b> om en person delas upp i flera<br>
-                  <b>↓ Sänk</b> om olika talare slås ihop<br><br>
-                  <i>Tumregel: börja på 0,70.</i>
+                  <span data-i18n="tip.diar.clu.title">Hur lika röster måste vara för att räknas som samma talare.</span><br>
+                  <b>↑ </b><span data-i18n="tip.diar.clu.high">Höj om en person delas upp i flera</span><br>
+                  <b>↓ </b><span data-i18n="tip.diar.clu.low">Sänk om olika talare slås ihop</span><br><br>
+                  <i data-i18n="tip.diar.clu.rule">Tumregel: börja på 0,70.</i>
                 </div>
               </div>
               <input type="range" id="diar-clu-thr" min="0.30" max="0.90" step="0.05" value="0.70" />
@@ -681,7 +682,7 @@
     </div>
     <p id="batch-spk-error" class="error-msg"></p>
     <div id="batch-spk-progress" class="hidden">
-      <div id="batch-spk-progress-label">Sparar fil <span id="batch-spk-cur">0</span>/<span id="batch-spk-total">0</span>…</div>
+      <div id="batch-spk-progress-label"></div>
     </div>
   </div>
 </div>
@@ -743,10 +744,10 @@
           <span id="palette-selected-hex" class="palette-hex-label">#0072B2</span>
         </div>
         <div id="palette-primary" class="palette-row"></div>
-        <button type="button" class="btn-sm palette-more-btn" id="btn-palette-more">Visa fler ▾</button>
+        <button type="button" class="btn-sm palette-more-btn" id="btn-palette-more" data-i18n="palette.more.show">Visa fler ▾</button>
         <div id="palette-extended" class="palette-row" style="display:none"></div>
         <div id="palette-shades-wrap" style="display:none">
-          <div class="palette-section-label">Nyanser av föräldern</div>
+          <div class="palette-section-label" data-i18n="palette.shades">Nyanser av föräldern</div>
           <div id="palette-shades" class="palette-row"></div>
         </div>
       </div>
@@ -826,7 +827,7 @@
 <!-- Merge dialog -->
 <div id="modal-merge" class="overlay hidden">
   <div class="dialog">
-    <h2 data-i18n="merge.title">Slå ihop kodningsfiler</h2>
+    <h2 data-i18n="merge.files.title">Slå ihop kodningsfiler</h2>
     <p data-i18n="merge.desc">Klistra in sökvägen till en kollegas .json-kodningsfil.</p>
     <label><span data-i18n="merge.path.label">Sökväg till fil</span>
       <input type="text" id="merge-path"
@@ -916,7 +917,7 @@
     <div id="codebook-mgr-list"></div>
     <div class="dialog-actions">
       <button class="btn-primary" id="btn-cb-add" data-i18n="code.new.title">Ny kod</button>
-      <button class="btn-ghost"   id="btn-cb-merge">Slå ihop koder</button>
+      <button class="btn-ghost"   id="btn-cb-merge" data-i18n="merge.codes.title">Slå ihop koder</button>
       <button class="btn-ghost"   id="btn-codebook-close" data-i18n="btn.close">Stäng</button>
     </div>
   </div>
@@ -925,20 +926,20 @@
 <!-- Merge codes modal -->
 <div id="modal-merge-codes" class="overlay hidden">
   <div class="dialog">
-    <h2>Slå ihop koder</h2>
-    <p style="font-size:13px;color:var(--text-dim);margin-bottom:12px">Alla annotationer från källkoden flyttas till målkoden. Källkoden tas bort.</p>
+    <h2 data-i18n="merge.codes.title">Slå ihop koder</h2>
+    <p data-i18n="merge.codes.desc" style="font-size:13px;color:var(--text-dim);margin-bottom:12px">Alla annotationer från källkoden flyttas till målkoden. Källkoden tas bort.</p>
     <div class="export-field-group">
-      <label>Källkod (tas bort)</label>
+      <label data-i18n="merge.source">Källkod (tas bort)</label>
       <select id="merge-source"></select>
     </div>
     <div class="export-field-group">
-      <label>Målkod (behålls)</label>
+      <label data-i18n="merge.target">Målkod (behålls)</label>
       <select id="merge-target"></select>
     </div>
     <div id="merge-status" style="font-size:13px;margin:8px 0"></div>
     <div class="dialog-actions">
-      <button class="btn-primary" id="btn-merge-codes-confirm">Slå ihop</button>
-      <button class="btn-ghost" id="btn-merge-codes-cancel">Avbryt</button>
+      <button class="btn-primary" id="btn-merge-codes-confirm" data-i18n="merge.confirm">Slå ihop</button>
+      <button class="btn-ghost" id="btn-merge-codes-cancel" data-i18n="btn.cancel">Avbryt</button>
     </div>
   </div>
 </div>
@@ -1020,7 +1021,7 @@
   <div class="dialog dialog-proj-search">
     <div class="proj-search-top">
       <h2 class="dialog-title" data-i18n="proj.search.title">Sök i projekt</h2>
-      <button class="btn-icon" id="btn-proj-search-close" title="Stäng">✕</button>
+      <button class="btn-icon" id="btn-proj-search-close" data-i18n-title="btn.close" title="Stäng">✕</button>
     </div>
     <div class="proj-search-input-row">
       <input type="text" id="proj-search-input"
@@ -1066,11 +1067,11 @@
 
 <div id="modal-confirm" class="overlay hidden">
   <div class="dialog">
-    <h2 id="confirm-modal-title">Bekräfta</h2>
+    <h2 id="confirm-modal-title" data-i18n="modal.confirm.title">Bekräfta</h2>
     <p id="confirm-modal-message" style="white-space:pre-wrap;"></p>
     <div class="dialog-actions">
       <button class="btn-primary" id="btn-confirm-ok">OK</button>
-      <button class="btn-ghost" id="btn-confirm-cancel">Avbryt</button>
+      <button class="btn-ghost" id="btn-confirm-cancel" data-i18n="btn.cancel">Avbryt</button>
     </div>
   </div>
 </div>

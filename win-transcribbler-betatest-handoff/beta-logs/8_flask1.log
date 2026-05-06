@@ -1,0 +1,25 @@
+Transcribbler körs på http://127.0.0.1:5050
+ * Serving Flask app 'main'
+ * Debug mode: off
+2026-04-25 09:34:20,650 INFO transcribbler: KB-Whisper: first run — downloading and converting model to CTranslate2 INT8 (this may take several minutes)…
+2026-04-25 09:34:20,650 INFO transcribbler: Removing partial KB-Whisper CTranslate2 directory C:\Users\jobh0003\.cache\transcribbler\kb-whisper-ct2 before re-converting
+2026-04-25 09:34:20,650 INFO transcribbler: Converting KBLab/kb-whisper-large \u2192 CTranslate2/INT8 at C:\Users\jobh0003\.cache\transcribbler\kb-whisper-ct2 (one-time, ~30 s)
+2026-04-25 09:34:20,650 ERROR transcribbler: Transcription job cb865484-7a52-4192-8b44-5dcbf946dfc8 failed
+Traceback (most recent call last):
+  File "C:\Users\jobh0003\transcribbler\main.py", line 410, in _transcription_job
+    gaps_result = transcribe_with_gaps(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jobh0003\transcribbler\core\transcribe.py", line 274, in transcribe_with_gaps
+    model = _load_faster_whisper_model(language_choice, model_size)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\jobh0003\transcribbler\core\transcribe.py", line 235, in _load_faster_whisper_model
+    _convert_kb_whisper_to_ct2(ct2_path)
+  File "C:\Users\jobh0003\transcribbler\core\transcribe.py", line 171, in _convert_kb_whisper_to_ct2
+    converter.convert(str(output_dir), quantization="int8", force=False)
+  File "C:\Users\jobh0003\transcribbler\venv\Lib\site-packages\ctranslate2\converters\converter.py", line 89, in convert
+    model_spec = self._load()
+                 ^^^^^^^^^^^^
+  File "C:\Users\jobh0003\transcribbler\venv\Lib\site-packages\ctranslate2\converters\transformers.py", line 108, in _load
+    config = transformers.AutoConfig.from_pretrained(
+             ^^^^^^^^^^^^
+NameError: name 'transformers' is not defined
