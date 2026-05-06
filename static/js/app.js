@@ -1883,6 +1883,7 @@ function _openSourcePanel(tid, transcript) {
   if (!hasSourceImg && pinModeEnabled) pinModeEnabled = false;
   _updatePinModeUi();
   if (hasSourceImg) renderPointPins();
+  _updateSourceBtnTooltip();
 }
 
 // ---- Point annotations on source image -----------------------------------
@@ -2025,14 +2026,16 @@ async function loadOcrBoxes(tid) {
   if (svg && _ocrBoxesVisible) svg.classList.remove("hidden");
 }
 
-document.getElementById("btn-source-img")?.addEventListener("click", () => {
-  if (!currentTid) return;
-  const tr = project?.transcripts?.find(t => t.id === currentTid);
-  _openSourcePanel(currentTid, tr);
-  if (tr?.source === "image") loadOcrBoxes(currentTid);
-  _sourceImgState[currentTid] = { open: true, boxesVisible: _ocrBoxesVisible };
-});
-document.getElementById("btn-close-source")?.addEventListener("click", () => {
+function _updateSourceBtnTooltip() {
+  const btn = document.getElementById("btn-source-img");
+  if (!btn) return;
+  const open = !document.getElementById("source-img-panel").classList.contains("hidden");
+  const key = open ? "tooltip.hide.source.image" : "tooltip.source.image";
+  btn.dataset.i18nTitle = key;
+  btn.title = t(key);
+}
+
+function _closeSourcePanel() {
   document.getElementById("source-img-panel").classList.add("hidden");
   document.getElementById("handle-source")?.classList.add("hidden");
   document.getElementById("source-img").src = "";
@@ -2041,7 +2044,23 @@ document.getElementById("btn-close-source")?.addEventListener("click", () => {
   const pc = document.getElementById("note-photos-container");
   if (pc) { pc.innerHTML = ""; pc.classList.add("hidden"); }
   if (currentTid) _sourceImgState[currentTid] = { open: false, boxesVisible: _ocrBoxesVisible };
+  _updateSourceBtnTooltip();
+}
+
+document.getElementById("btn-source-img")?.addEventListener("click", () => {
+  if (!currentTid) return;
+  const panelOpen = !document.getElementById("source-img-panel").classList.contains("hidden");
+  if (panelOpen) {
+    _closeSourcePanel();
+    return;
+  }
+  const tr = project?.transcripts?.find(t => t.id === currentTid);
+  _openSourcePanel(currentTid, tr);
+  if (tr?.source === "image") loadOcrBoxes(currentTid);
+  _sourceImgState[currentTid] = { open: true, boxesVisible: _ocrBoxesVisible };
+  _updateSourceBtnTooltip();
 });
+document.getElementById("btn-close-source")?.addEventListener("click", _closeSourcePanel);
 document.getElementById("btn-ocr-photos")?.addEventListener("click", async () => {
   if (!currentTid) return;
   const btn = document.getElementById("btn-ocr-photos");
