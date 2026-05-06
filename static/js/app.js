@@ -4371,12 +4371,16 @@ function setupAnnSearch() {
       const byId = {};
       flat.forEach(c => { byId[c.id] = c; });
       const recent = recentIds.map(id => byId[id]).filter(Boolean).slice(0, 5);
-      // If we have <5 recent, fill from top of flat list (alphabetical / tree order)
+      // If we have <5 recently used, fill remaining slots with most recently
+      // CREATED codes (newest first) — matches user expectation that newly
+      // made codes are top-of-mind even if not used yet.
       if (recent.length < 5) {
         const seen = new Set(recent.map(c => c.id));
-        for (const c of flat) {
+        const unused = flat.filter(c => !seen.has(c.id));
+        unused.sort((a, b) => (b.created || "").localeCompare(a.created || ""));
+        for (const c of unused) {
           if (recent.length >= 5) break;
-          if (!seen.has(c.id)) recent.push(c);
+          recent.push(c);
         }
       }
       filtered = recent;
