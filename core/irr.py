@@ -8,8 +8,9 @@ these two vectors.
 """
 from __future__ import annotations
 
-from .annotation import load_annotations
+from .annotation import load_annotations, is_text_annotation
 from .project import get_transcript_text
+from .i18n import tr
 
 
 def cohens_kappa(folder: str, project: dict, tid: str,
@@ -25,7 +26,7 @@ def cohens_kappa(folder: str, project: dict, tid: str,
     text = get_transcript_text(folder, t, key=key)
     n = len(text)
     if n == 0:
-        raise ValueError("Transcript is empty.")
+        raise ValueError(tr("Transkriptet är tomt."))
 
     anns_a = load_annotations(folder, tid, coder_a, key=key)
     anns_b = load_annotations(folder, tid, coder_b, key=key)
@@ -34,8 +35,11 @@ def cohens_kappa(folder: str, project: dict, tid: str,
     vec_a = _build_vector(anns_a, n)
     vec_b = _build_vector(anns_b, n)
 
-    # Collect all categories
-    categories = sorted(set(vec_a) | set(vec_b))
+    # Collect all categories (None = uncoded character; sort it first)
+    categories = sorted(set(vec_a) | set(vec_b), key=lambda c: (c is not None, c or ""))
+    if categories == [None]:
+        # Neither coder has coded anything: agreement is trivial, kappa undefined
+        raise ValueError(tr("Ingen av kodarna har kodat transkriptet."))
 
     # Observed agreement (Po)
     agree = sum(1 for a, b in zip(vec_a, vec_b) if a == b)
@@ -85,7 +89,7 @@ def cohens_kappa(folder: str, project: dict, tid: str,
 def _build_vector(anns: list, n: int) -> list:
     """Map each char position to its code_id (last annotation wins on overlap)."""
     vec = [None] * n
-    for ann in sorted(anns, key=lambda a: a["start"]):
+    for ann in sorted(filter(is_text_annotation, anns), key=lambda a: a["start"]):
         s = max(0, ann["start"])
         e = min(n, ann["end"])
         for i in range(s, e):
@@ -94,15 +98,17 @@ def _build_vector(anns: list, n: int) -> list:
 
 
 def _interpret(kappa: float) -> str:
+    """Verbal band after Landis & Koch (1977): 0.00–0.20 slight, 0.21–0.40
+    fair, 0.41–0.60 moderate, 0.61–0.80 substantial, 0.81–1.00 almost perfect."""
     if kappa < 0:
-        return "Sämre än slumpen"
-    elif kappa < 0.20:
-        return "Minimal överenstämmelse"
-    elif kappa < 0.40:
-        return "Svag överenstämmelse"
-    elif kappa < 0.60:
-        return "Måttlig överenstämmelse"
-    elif kappa < 0.80:
-        return "Stark överenstämmelse"
+        return tr("Sämre än slumpen (Landis & Koch)")
+    elif kappa <= 0.20:
+        return tr("Obetydlig överensstämmelse (Landis & Koch)")
+    elif kappa <= 0.40:
+        return tr("Viss överensstämmelse (Landis & Koch)")
+    elif kappa <= 0.60:
+        return tr("Måttlig överensstämmelse (Landis & Koch)")
+    elif kappa <= 0.80:
+        return tr("Betydande överensstämmelse (Landis & Koch)")
     else:
-        return "Nästan perfekt överenstämmelse"
+        return tr("Nästan perfekt överensstämmelse (Landis & Koch)")

@@ -4,6 +4,7 @@ stats.py — Code usage statistics across a project or single transcript.
 from __future__ import annotations
 
 from .annotation import load_all_coders
+from .i18n import tr
 from .codebook import get_code, build_tree
 
 
@@ -37,7 +38,7 @@ def compute_stats(folder: str, project: dict, tid: str = None, *, key: bytes | N
         code = code_map.get(cid)
         rows.append({
             "code_id":    cid,
-            "name":       code["name"] if code else f"[borttagen: {cid}]",
+            "name":       code["name"] if code else tr("[borttagen: {id}]", id=cid),
             "color":      code["color"] if code else "#888",
             "parent":     code.get("parent") if code else None,
             "count":      data["count"],

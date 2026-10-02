@@ -97,39 +97,55 @@ function waitForFlask(port, timeout = 60000) {
 const menuLabels = {
   sv: {
     about: 'Om transcribbler', hide: 'Göm transcribbler', hideOthers: 'Göm övriga',
-    showAll: 'Visa alla', quit: 'Avsluta transcribbler',
+    showAll: 'Visa alla', quitApp: 'Avsluta transcribbler',
     file: 'Arkiv', importItem: 'Importera...', close: 'Stäng fönster', quit: 'Avsluta',
     edit: 'Redigera', undo: 'Ångra', redo: 'Gör om', cut: 'Klipp ut',
     copy: 'Kopiera', paste: 'Klistra in', selectAll: 'Markera allt',
     tools: 'Verktyg', stats: 'Statistik', irr: 'IRR', codebook: 'Kodbok',
     codetree: 'Kodträd', matrix: 'Kodmatris', overlap: 'Kodöverlapp',
-    merge: 'Slå ihop filer',
+    merge: 'Importera kodningar…', exportCodings: 'Exportera mina kodningar',
     view: 'Visa', reload: 'Ladda om', forceReload: 'Tvinga omladdning',
     devTools: 'Utvecklarverktyg', fullscreen: 'Helskärm',
     window: 'Fönster', minimize: 'Minimera', zoom: 'Zooma', front: 'Flytta till främsta',
     help: 'Hjälp', github: 'Transcribbler på GitHub',
     folderPickerTitle: 'Välj projektmapp',
+    savePdfTitle: 'Spara PDF',
     flaskErrorTitle: 'Transcribbler',
     flaskErrorBody: 'Kunde inte starta Flask-servern.\nKontrollera att Python och beroenden är installerade.',
   },
   en: {
     about: 'About transcribbler', hide: 'Hide transcribbler', hideOthers: 'Hide Others',
-    showAll: 'Show All', quit: 'Quit transcribbler',
+    showAll: 'Show All', quitApp: 'Quit transcribbler',
     file: 'File', importItem: 'Import...', close: 'Close Window', quit: 'Quit',
     edit: 'Edit', undo: 'Undo', redo: 'Redo', cut: 'Cut',
     copy: 'Copy', paste: 'Paste', selectAll: 'Select All',
     tools: 'Tools', stats: 'Statistics', irr: 'IRR', codebook: 'Codebook',
     codetree: 'Code tree', matrix: 'Code matrix', overlap: 'Code overlap',
-    merge: 'Merge files',
+    merge: 'Import codings…', exportCodings: 'Export my codings',
     view: 'View', reload: 'Reload', forceReload: 'Force Reload',
     devTools: 'Developer Tools', fullscreen: 'Full Screen',
-    window: 'Window', minimize: 'Minimize', zoom: 'Zoom', front: 'Bring All to Front',
+    window: 'Window', minimize: 'Minimise', zoom: 'Zoom', front: 'Bring All to Front',
     help: 'Help', github: 'Transcribbler on GitHub',
     folderPickerTitle: 'Choose project folder',
+    savePdfTitle: 'Save PDF',
     flaskErrorTitle: 'Transcribbler',
     flaskErrorBody: 'Could not start the Flask server.\nMake sure Python and dependencies are installed.',
   },
 };
+
+// The renderer reports its language via 'set-menu-lang'; remember it so the
+// menu and the Flask start-up error dialog use it on the next launch too.
+const LANG_FILE = () => path.join(app.getPath('userData'), 'ui-lang.json');
+function loadSavedLang() {
+  try { return JSON.parse(fs.readFileSync(LANG_FILE(), 'utf8')).lang === 'en' ? 'en' : 'sv'; }
+  catch (_) {
+    // First launch: same rule as the renderer — Swedish system → sv, else en
+    return String(app.getLocale() || '').toLowerCase().startsWith('sv') ? 'sv' : 'en';
+  }
+}
+function saveLang(lang) {
+  try { fs.writeFileSync(LANG_FILE(), JSON.stringify({ lang })); } catch (_) {}
+}
 
 let currentLang = 'sv';
 function getLabels() {
@@ -160,7 +176,7 @@ function buildMenu(lang = 'sv') {
         { label: L.hideOthers, role: 'hideOthers' },
         { label: L.showAll, role: 'unhide' },
         { type: 'separator' },
-        { label: L.quit, role: 'quit' },
+        { label: L.quitApp, role: 'quit' },
       ],
     });
   }
@@ -203,6 +219,7 @@ function buildMenu(lang = 'sv') {
       { label: L.matrix,   click: () => clickButton('btn-code-matrix') },
       { label: L.overlap,  click: () => clickButton('btn-cooccurrence') },
       { type: 'separator' },
+      { label: L.exportCodings, click: () => clickButton('btn-export-codings') },
       { label: L.merge,    click: () => clickButton('btn-merge') },
     ],
   });
@@ -242,6 +259,7 @@ function buildMenu(lang = 'sv') {
 
 ipcMain.on('set-menu-lang', (_event, lang) => {
   buildMenu(lang);
+  saveLang(currentLang);
 });
 
 function createWindow(port) {
@@ -299,7 +317,7 @@ ipcMain.handle('save-pdf', async (event, defaultName) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   const safeName = String(defaultName || 'analys').replace(/[\\/:*?"<>|]/g, '_').trim() || 'analys';
   const result = await dialog.showSaveDialog(win, {
-    title: 'Spara PDF',
+    title: getLabels().savePdfTitle,
     defaultPath: `${safeName}.pdf`,
     filters: [{ name: 'PDF', extensions: ['pdf'] }],
   });
@@ -387,7 +405,7 @@ app.whenReady().then(async () => {
     }
   }
 
-  buildMenu();
+  buildMenu(loadSavedLang());
   await launchInstance();
 
   app.on('activate', () => {

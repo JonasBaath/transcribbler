@@ -5,9 +5,10 @@ from __future__ import annotations
 
 import csv
 import io
-from .annotation import load_all_coders
+from .annotation import load_all_coders, is_text_annotation
 from .codebook import get_code, flat_list, build_tree
 from .project import get_transcript_text
+from .i18n import tr
 
 
 # ---------------------------------------------------------------------------
@@ -72,9 +73,9 @@ def export_markdown_by_code(folder: str, project: dict, tid=None, *, key: bytes 
                 by_code[cid].append({**ann, "transcript_name": t["name"], "coder": coder})
 
     if not by_code:
-        return "_Inga kodningar hittades._\n"
+        return tr("_Inga kodningar hittades._") + "\n"
 
-    lines = [f"# {project['name']} — Kodade citat\n"]
+    lines = [f"# {tr('{name} — Kodade citat', name=project['name'])}\n"]
 
     tree = build_tree(project)
     _render_tree_md(tree, by_code, lines, level=2)
@@ -83,7 +84,7 @@ def export_markdown_by_code(folder: str, project: dict, tid=None, *, key: bytes 
     known_ids = {c["id"] for c in project["codes"]}
     orphans = [cid for cid in by_code if cid not in known_ids]
     if orphans:
-        lines.append("## Okända koder\n")
+        lines.append(f"## {tr('Okända koder')}\n")
         for cid in orphans:
             lines.append(f"### {cid}\n")
             for ann in by_code[cid]:
@@ -196,14 +197,14 @@ def export_markdown_codebook(project: dict, counts: dict | None = None) -> str:
     """Export the codebook as a Markdown document."""
     if counts is None:
         counts = {}
-    lines = [f"# Kodbok — {project['name']}\n"]
+    lines = [f"# {tr('Kodbok — {name}', name=project['name'])}\n"]
     tree = build_tree(project)
     numbered = bool(project.get("numbering"))
     if numbered:
         _assign_numbers_py(tree, "")
     _render_codebook_tree(tree, lines, level=2, numbered=numbered, counts=counts)
     if not tree:
-        lines.append("_Kodboken är tom._\n")
+        lines.append(tr("_Kodboken är tom._") + "\n")
     return "\n".join(lines)
 
 
@@ -212,13 +213,13 @@ def export_markdown_transcript(folder: str, project: dict, tid: str, coder: str,
     from .annotation import load_annotations
     t = next((t for t in project["transcripts"] if t["id"] == tid), None)
     if not t:
-        return "_Transkript hittades inte._\n"
+        return tr("_Transkript hittades inte._") + "\n"
 
     text = get_transcript_text(folder, t, key=key)
     anns = load_annotations(folder, tid, coder, key=key)
-    anns_sorted = sorted(anns, key=lambda a: a["start"])
+    anns_sorted = sorted(filter(is_text_annotation, anns), key=lambda a: a["start"])
 
-    lines = [f"# {t['name']}\n", f"_Kodare: {coder}_\n\n---\n"]
+    lines = [f"# {t['name']}\n", f"_{tr('Kodare: {coder}', coder=coder)}_\n\n---\n"]
     cursor = 0
     for ann in anns_sorted:
         s, e = ann["start"], ann["end"]
@@ -230,7 +231,7 @@ def export_markdown_transcript(folder: str, project: dict, tid: str, coder: str,
         lines.append(f"**[{code_name}]** *{text[s:e]}*")
         cursor = e
     lines.append(text[cursor:])
-    lines.append("\n\n---\n\n## Kodsammanfattning\n")
+    lines.append(f"\n\n---\n\n## {tr('Kodsammanfattning')}\n")
     for ann in anns_sorted:
         code = get_code(project, ann["code_id"])
         code_name = code["name"] if code else ann["code_id"]
@@ -256,7 +257,7 @@ def _code_path(project: dict, code_id: str) -> str:
 
 
 def _format_quote(ann: dict) -> str:
-    lines = [f"\n**{ann['transcript_name']}** _(kodare: {ann['coder']})_"]
+    lines = [f"\n**{ann['transcript_name']}** _({tr('kodare: {coder}', coder=ann['coder'])})_"]
     lines.append(f"> {ann['text']}")
     if ann.get("memo"):
         lines.append(f"> _Memo: {ann['memo']}_")
@@ -310,7 +311,7 @@ def export_codetree_docx(project: dict) -> bytes:
     if numbered:
         _assign_numbers_py(tree, "")
     doc = Document()
-    doc.add_heading(f"Kodbok — {project['name']}", 0)
+    doc.add_heading(tr("Kodbok — {name}", name=project["name"]), 0)
 
     def _hex_rgb(hex_color):
         h = hex_color.lstrip("#")
@@ -362,7 +363,7 @@ def export_codetree_odt(project: dict) -> bytes:
     doc = OpenDocumentText()
 
     title_el = H(outlinelevel=1)
-    title_el.addText(f"Kodbok — {project['name']}")
+    title_el.addText(tr("Kodbok — {name}", name=project["name"]))
     doc.text.addElement(title_el)
 
     def _walk(nodes, depth):

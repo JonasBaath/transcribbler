@@ -6,6 +6,7 @@ Distinct from cooccurrence (code × code overlap); this shows per-transcript cod
 """
 from __future__ import annotations
 from .annotation import load_all_coders
+from .i18n import tr
 
 
 def compute_code_matrix(folder: str, project: dict, *, key: bytes | None = None) -> dict:
@@ -44,7 +45,7 @@ def compute_code_matrix(folder: str, project: dict, *, key: bytes | None = None)
         c = code_map.get(cid)
         codes_out.append({
             "id":    cid,
-            "name":  c["name"] if c else f"[borttagen: {cid}]",
+            "name":  c["name"] if c else tr("[borttagen: {id}]", id=cid),
             "color": c["color"] if c else "#888",
         })
 

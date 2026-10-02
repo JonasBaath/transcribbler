@@ -24,6 +24,7 @@ from core import codebook as cb_mod
 from core import annotation as ann_mod
 from core import export as exp_mod
 from core import merge as merge_mod
+from core.i18n import tr, set_lang
 
 # Apply PyTorch 2.6+ compatibility patch for pyannote/lightning_fabric
 import core.transcribe as _tr_mod  # noqa — triggers _patch_torch_load() at import time
@@ -40,6 +41,12 @@ logging.getLogger("transcribbler.timing").setLevel(logging.INFO)
 logging.getLogger("werkzeug").setLevel(logging.WARNING)
 
 app = Flask(__name__)
+
+
+@app.before_request
+def _set_request_lang():
+    # UI language from the cookie set by setLang() in translations.js
+    set_lang(request.cookies.get("transcribbler_lang"))
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = 0  # disable static file caching
 
 # ---------------------------------------------------------------------------
@@ -114,6 +121,30 @@ def _save_config(cfg: dict):
     os.chmod(CONFIG_FILE, 0o600)
 
 
+# ---------------------------------------------------------------------------
+# Feature flags
+# ---------------------------------------------------------------------------
+# Whisper-transkribering (ljud → text) är avstängd som standard: programmet
+# används i undervisning där studenterna ska koda färdiga transkript, inte
+# transkribera. Redan transkriberade ljudtranskript (ljudspelare, segment,
+# vågform) fungerar oavsett flaggan. Slå på med "enable_whisper": true i
+# ~/.transcribbler_config.json eller miljövariabeln
+# TRANSCRIBBLER_ENABLE_WHISPER=1 (t.ex. när läraren förtranskriberar).
+
+def whisper_enabled() -> bool:
+    if os.environ.get("TRANSCRIBBLER_ENABLE_WHISPER", "") in ("1", "true", "yes"):
+        return True
+    return bool(_load_config().get("enable_whisper"))
+
+
+def _features() -> dict:
+    return {"whisper": whisper_enabled()}
+
+
+WHISPER_DISABLED_MSG = ("Ljudtranskribering är inte tillgänglig i den här versionen. "
+                        "Importera ett färdigt transkript (.txt, .docx, .md) i stället.")
+
+
 def _load_recent() -> list:
     import tempfile
     _tmpdir = Path(tempfile.gettempdir()).resolve()
@@ -153,7 +184,7 @@ def _remove_recent(folder: str):
 
 def _require_project():
     if not STATE["folder"] or not STATE["project"]:
-        return jsonify({"error": "Inget projekt öppnat."}), 400
+        return jsonify({"error": tr("Inget projekt öppnat.")}), 400
     return None
 
 
@@ -226,6 +257,16 @@ def get_recent():
     return jsonify({"recent": _load_recent()})
 
 
+@app.route("/api/project/recent/remove", methods=["POST"])
+def remove_recent():
+    """Forget a project in the recent list without touching its files."""
+    folder = ((request.json or {}).get("folder") or "").strip()
+    if not folder:
+        return jsonify({"error": tr("folder krävs.")}), 400
+    _remove_recent(folder)
+    return jsonify({"ok": True, "recent": _load_recent()})
+
+
 @app.route("/api/pick-folder", methods=["GET"])
 def pick_folder():
     """Open a native OS folder picker and return the chosen path."""
@@ -235,7 +276,7 @@ def pick_folder():
         if system == "Darwin":
             result = subprocess.run(
                 ["osascript", "-e",
-                 'POSIX path of (choose folder with prompt "Välj projektmapp")'],
+                 f'POSIX path of (choose folder with prompt "{tr("Välj projektmapp")}")'],
                 capture_output=True, text=True, timeout=60,
             )
             folder = result.stdout.strip().rstrip("/")
@@ -243,7 +284,7 @@ def pick_folder():
             ps = (
                 "Add-Type -AssemblyName System.Windows.Forms;"
                 "$d = New-Object System.Windows.Forms.FolderBrowserDialog;"
-                "$d.Description = 'Välj projektmapp';"
+                f"$d.Description = '{tr('Välj projektmapp')}';"
                 "if ($d.ShowDialog() -eq 'OK') { $d.SelectedPath }"
             )
             result = subprocess.run(
@@ -256,7 +297,7 @@ def pick_folder():
             try:
                 result = subprocess.run(
                     ["zenity", "--file-selection", "--directory",
-                     "--title=Välj projektmapp"],
+                     f"--title={tr('Välj projektmapp')}"],
                     capture_output=True, text=True, timeout=60,
                 )
                 folder = result.stdout.strip()
@@ -269,7 +310,7 @@ def pick_folder():
         return jsonify({"folder": folder or ""})
     except Exception:
         logger.exception("pick_folder failed")
-        return jsonify({"error": "Kunde inte öppna mappväljaren.", "folder": ""}), 500
+        return jsonify({"error": tr("Kunde inte öppna mappväljaren."), "folder": ""}), 500
 
 
 @app.route("/api/project/new", methods=["POST"])
@@ -280,7 +321,9 @@ def new_project():
     coder = data.get("coder", "").strip()
     password = data.get("password", "").strip() or None
     if not folder or not name or not coder:
-        return jsonify({"error": "folder, name och coder krävs."}), 400
+        return jsonify({"error": tr("folder, name och coder krävs.")}), 400
+    if not ann_mod.is_valid_coder_name(coder):
+        return jsonify({"error": tr("Kodarnamnet får bara innehålla bokstäver, siffror, mellanslag, bindestreck och understreck (inga punkter).")}), 400
     project, derived_key = proj_mod.create_project(folder, name, coder, password=password)
     STATE["folder"] = folder
     STATE["project"] = project
@@ -304,12 +347,12 @@ def delete_project():
     data = request.json or {}
     folder = data.get("folder", "").strip()
     if not folder:
-        return jsonify({"error": "folder krävs."}), 400
+        return jsonify({"error": tr("folder krävs.")}), 400
     folder_path = Path(folder)
     project_file = folder_path / proj_mod.PROJECT_FILE
     if not project_file.exists():
         _remove_recent(folder)
-        return jsonify({"error": "Projektfil saknas."}), 404
+        return jsonify({"error": tr("Projektfil saknas.")}), 404
     # Delete Transcribbler project files only
     project_file.unlink(missing_ok=True)
     transcripts_dir = folder_path / proj_mod.TRANSCRIPTS_DIR
@@ -339,18 +382,20 @@ def open_project():
     coder = data.get("coder", "").strip()
     password = data.get("password", "").strip() or None
     if not folder or not coder:
-        return jsonify({"error": "folder och coder krävs."}), 400
+        return jsonify({"error": tr("folder och coder krävs.")}), 400
+    if not ann_mod.is_valid_coder_name(coder):
+        return jsonify({"error": tr("Kodarnamnet får bara innehålla bokstäver, siffror, mellanslag, bindestreck och understreck (inga punkter).")}), 400
     try:
         project, derived_key = proj_mod.open_project(folder, password=password)
     except FileNotFoundError:
-        return jsonify({"error": "Ingen giltig projektmapp."}), 404
+        return jsonify({"error": tr("Ingen giltig projektmapp.")}), 404
     except ValueError as e:
         msg = str(e)
         if msg == "encrypted":
             return jsonify({"error": "encrypted", "encrypted": True}), 401
         elif msg == "wrong_password":
             return jsonify({"error": "wrong_password"}), 401
-        return jsonify({"error": msg}), 400
+        return jsonify({"error": tr(msg)}), 400
     STATE["folder"] = folder
     STATE["project"] = project
     STATE["coder"] = coder
@@ -567,7 +612,7 @@ def upload_transcript():
     name = request.form.get("name", "").strip()
 
     if not f:
-        return jsonify({"error": "Ingen fil bifogad."}), 400
+        return jsonify({"error": tr("Ingen fil bifogad.")}), 400
 
     ext = Path(f.filename).suffix.lower()
     original_stem = Path(f.filename).stem
@@ -578,7 +623,10 @@ def upload_transcript():
     tmp.close()
 
     if is_audio(tmp.name):
-        pass  # fall through to audio handling below
+        if not whisper_enabled():
+            Path(tmp.name).unlink(missing_ok=True)
+            return jsonify({"error": tr(WHISPER_DISABLED_MSG)}), 400
+        # fall through to audio handling below
     elif is_image(tmp.name):
         run_ocr = request.form.get("run_ocr", "1") == "1"
         if not run_ocr:
@@ -597,7 +645,7 @@ def upload_transcript():
                 return jsonify({"ok": True, "project": updated})
             except Exception:
                 logger.exception("image import (no OCR) failed")
-                return jsonify({"error": "Kunde inte importera bilden."}), 500
+                return jsonify({"error": tr("Kunde inte importera bilden.")}), 500
             finally:
                 Path(tmp.name).unlink(missing_ok=True)
         # --- Async path (image OCR) ---
@@ -619,16 +667,16 @@ def upload_transcript():
         password = request.form.get("scribbler_password", "")
         if not password:
             Path(tmp.name).unlink(missing_ok=True)
-            return jsonify({"error": "Lösenord krävs för .scribbler-filer."}), 400
+            return jsonify({"error": tr("Lösenord krävs för .scribbler-filer.")}), 400
         try:
             plaintext = decrypt_scribbler(tmp.name, password)
         except (ValueError, ImportError) as e:
             Path(tmp.name).unlink(missing_ok=True)
-            return jsonify({"error": str(e)}), 400
+            return jsonify({"error": tr(str(e))}), 400
         except Exception:
             logger.exception("scribbler decrypt failed")
             Path(tmp.name).unlink(missing_ok=True)
-            return jsonify({"error": "Dekrypteringen misslyckades."}), 500
+            return jsonify({"error": tr("Dekrypteringen misslyckades.")}), 500
 
         md_tmp = tempfile.NamedTemporaryFile(suffix=".md", delete=False)
         md_tmp.write(plaintext)
@@ -643,7 +691,7 @@ def upload_transcript():
             return jsonify({"ok": True, "project": updated})
         except Exception:
             logger.exception("add_transcript failed for scribbler import")
-            return jsonify({"error": "Kunde inte importera transkriptet."}), 500
+            return jsonify({"error": tr("Kunde inte importera transkriptet.")}), 500
         finally:
             Path(tmp.name).unlink(missing_ok=True)
             Path(md_tmp.name).unlink(missing_ok=True)
@@ -654,19 +702,21 @@ def upload_transcript():
         password = request.form.get("scribbler_password", "")
         if not password:
             Path(tmp.name).unlink(missing_ok=True)
-            return jsonify({"error": "Lösenord krävs för .nsenc-filer."}), 400
+            return jsonify({"error": tr("Lösenord krävs för .nsenc-filer.")}), 400
         try:
             notes, nsenc_photos = decrypt_nsenc(tmp.name, password)
         except (ValueError, ImportError) as e:
             Path(tmp.name).unlink(missing_ok=True)
             msg = str(e)
+            # Match on the untranslated key, then translate both parts
+            tip = ""
             if "Fel lösenord" in msg:
-                msg += " Tips: om du använde 'Lösenfrasen från valvet' vid exporten, ange Notescribbler-applösenordet."
-            return jsonify({"error": msg}), 400
+                tip = tr(" Tips: om du använde 'Lösenfrasen från valvet' vid exporten, ange Notescribbler-applösenordet.")
+            return jsonify({"error": tr(msg) + tip}), 400
         except Exception:
             logger.exception("nsenc decrypt failed")
             Path(tmp.name).unlink(missing_ok=True)
-            return jsonify({"error": "Dekrypteringen misslyckades."}), 500
+            return jsonify({"error": tr("Dekrypteringen misslyckades.")}), 500
         finally:
             Path(tmp.name).unlink(missing_ok=True)
 
@@ -736,7 +786,7 @@ def upload_transcript():
         import zipfile, re as _re
         if not zipfile.is_zipfile(tmp.name):
             Path(tmp.name).unlink(missing_ok=True)
-            return jsonify({"error": "Ogiltig zip-fil."}), 400
+            return jsonify({"error": tr("Ogiltig zip-fil.")}), 400
 
         def _parse_zip_photos(md_text: str) -> list:
             """Return photos list from YAML frontmatter of an md string."""
@@ -759,7 +809,7 @@ def upload_transcript():
                             if n.lower().endswith(".md") and not n.startswith("__MACOSX")]
             if not md_names:
                 Path(tmp.name).unlink(missing_ok=True)
-                return jsonify({"error": "Zip-filen innehåller inga .md-filer."}), 400
+                return jsonify({"error": tr("Zip-filen innehåller inga .md-filer.")}), 400
             updated = STATE["project"]
             imported = 0
             with zipfile.ZipFile(tmp.name) as zf:
@@ -811,7 +861,7 @@ def upload_transcript():
             STATE["project"] = updated
             return jsonify({"ok": True, "project": updated, "count": imported})
         except zipfile.BadZipFile:
-            return jsonify({"error": "Ogiltig zip-fil."}), 400
+            return jsonify({"error": tr("Ogiltig zip-fil.")}), 400
         finally:
             Path(tmp.name).unlink(missing_ok=True)
     else:
@@ -826,7 +876,7 @@ def upload_transcript():
             return jsonify({"ok": True, "project": updated})
         except Exception:
             logger.exception("add_transcript (sync) failed")
-            return jsonify({"error": "Kunde inte importera filen."}), 500
+            return jsonify({"error": tr("Kunde inte importera filen.")}), 500
         finally:
             try:
                 Path(tmp.name).unlink(missing_ok=True)
@@ -887,7 +937,7 @@ def get_job(job_id):
     _cleanup_expired_jobs()
     job = JOBS.get(job_id)
     if not job:
-        return jsonify({"error": "Jobb hittades inte."}), 404
+        return jsonify({"error": tr("Jobb hittades inte.")}), 404
     # Stamp finish time on first poll after completion (for expiry cleanup)
     if job["status"] in ("done", "error") and "_finished_at" not in job:
         job["_finished_at"] = time.monotonic()
@@ -896,7 +946,7 @@ def get_job(job_id):
         "status":   job["status"],
         "stage":    job["stage"],
         "progress": job["progress"],
-        "error":    job["error"],
+        "error":    tr(job["error"]) if job["error"] else None,
         # audio job fields
         "speakers_found": result.get("speakers_found", []),
         "voice_matches":  result.get("voice_matches", {}),
@@ -919,7 +969,7 @@ def commit_transcript(job_id):
 
     job = JOBS.get(job_id)
     if not job or job["status"] != "done":
-        return jsonify({"error": "Jobbet är inte klart eller hittades inte."}), 400
+        return jsonify({"error": tr("Jobbet är inte klart eller hittades inte.")}), 400
 
     data = request.json or {}
     speaker_map = data.get("speakers", {})
@@ -955,6 +1005,7 @@ def commit_transcript(job_id):
         "speakers": speaker_map,
     }
 
+    enc_key = _key()
     try:
         with _PROJECT_LOCK:
             current = proj_mod.reload_project(STATE["folder"], key=enc_key)
@@ -969,7 +1020,7 @@ def commit_transcript(job_id):
         # NOTE: do NOT pop the job or delete audio_path on failure — leaving
         # them in place lets the frontend retry the commit without losing
         # the (expensive) transcription/diarization result.
-        return jsonify({"error": "Kunde inte spara transkriptet."}), 500
+        return jsonify({"error": tr("Kunde inte spara transkriptet.")}), 500
 
     # Success — now safe to clean up the temp audio file and job entry.
     try:
@@ -984,6 +1035,12 @@ def commit_transcript(job_id):
 # ---------------------------------------------------------------------------
 # System info — helps users understand hardware capabilities
 # ---------------------------------------------------------------------------
+
+@app.route("/api/features", methods=["GET"])
+def get_features():
+    """Feature flags the frontend uses to show/hide UI (see whisper_enabled)."""
+    return jsonify(_features())
+
 
 @app.route("/api/system-info", methods=["GET"])
 def system_info():
@@ -1043,7 +1100,7 @@ def system_info():
     warnings = []
     if info["ram_gb"] and info["ram_gb"] < 6:
         warnings.append("low_ram")
-    if info["gpu"] == "none":
+    if info["gpu"] == "none" and whisper_enabled():
         warnings.append("no_gpu")
     if info["disk_free_gb"] and info["disk_free_gb"] < 4:
         warnings.append("low_disk")
@@ -1066,7 +1123,7 @@ def get_hf_token():
 def set_hf_token():
     token = (request.json or {}).get("token", "").strip()
     if not token:
-        return jsonify({"error": "Token får inte vara tomt."}), 400
+        return jsonify({"error": tr("Token får inte vara tomt.")}), 400
 
     # Validate by pinging HF API
     try:
@@ -1077,9 +1134,9 @@ def set_hf_token():
         )
         with urllib.request.urlopen(req, timeout=8) as resp:
             if resp.status != 200:
-                return jsonify({"error": "Ogiltigt token (HF svarade med fel)."}), 400
+                return jsonify({"error": tr("Ogiltigt token (HF svarade med fel).")}), 400
     except Exception as exc:
-        return jsonify({"error": f"Kunde inte validera token: {exc}"}), 400
+        return jsonify({"error": tr("Kunde inte validera token: {error}", error=exc)}), 400
 
     cfg = _load_config()
     cfg["hf_token"] = token
@@ -1116,7 +1173,7 @@ def delete_voice_profile_route():
     from core.transcribe import delete_voice_profile
     coder = STATE.get("coder") or ""
     if not coder:
-        return jsonify({"error": "Ingen kodare aktiv."}), 400
+        return jsonify({"error": tr("Ingen kodare aktiv.")}), 400
     deleted = delete_voice_profile(coder)
     return jsonify({"ok": True, "deleted": deleted})
 
@@ -1128,16 +1185,18 @@ def extract_voice_profile():
     Runs synchronously (audio should be short: 30–120 s).
     """
     from core.transcribe import extract_voice_embedding, save_voice_profile
+    if not whisper_enabled():
+        return jsonify({"error": tr(WHISPER_DISABLED_MSG)}), 400
     coder = STATE.get("coder") or ""
     if not coder:
-        return jsonify({"error": "Ingen kodare aktiv."}), 400
+        return jsonify({"error": tr("Ingen kodare aktiv.")}), 400
 
     if "file" not in request.files:
-        return jsonify({"error": "Ingen fil skickades."}), 400
+        return jsonify({"error": tr("Ingen fil skickades.")}), 400
 
     file = request.files["file"]
     if not file.filename:
-        return jsonify({"error": "Tomt filnamn."}), 400
+        return jsonify({"error": tr("Tomt filnamn.")}), 400
 
     import tempfile
     suffix = Path(file.filename).suffix.lower() or ".wav"
@@ -1156,7 +1215,7 @@ def extract_voice_profile():
         })
     except Exception:
         logger.exception("Voice profile extraction failed")
-        return jsonify({"error": "Kunde inte skapa röstprofil."}), 500
+        return jsonify({"error": tr("Kunde inte skapa röstprofil.")}), 500
     finally:
         try:
             Path(tmp_path).unlink(missing_ok=True)
@@ -1174,16 +1233,18 @@ def add_transcript():
     src = data.get("path", "").strip()
     name = data.get("name", "").strip()
     if not src:
-        return jsonify({"error": "path krävs."}), 400
+        return jsonify({"error": tr("path krävs.")}), 400
 
     src_path = Path(src).resolve()
     if not src_path.is_file():
-        return jsonify({"error": "Filen hittades inte."}), 400
+        return jsonify({"error": tr("Filen hittades inte.")}), 400
 
     from core.transcribe import is_audio, transcribe_to_file
     import tempfile
 
     if is_audio(str(src_path)):
+        if not whisper_enabled():
+            return jsonify({"error": tr(WHISPER_DISABLED_MSG)}), 400
         model_size = data.get("model", "medium")
         language = data.get("language", "sv")
         tmp = tempfile.NamedTemporaryFile(suffix=".txt", delete=False)
@@ -1195,7 +1256,7 @@ def add_transcript():
                 name = Path(data["path"]).stem
         except Exception:
             logger.exception("Legacy transcription failed: %s", src_path)
-            return jsonify({"error": "Transkription misslyckades."}), 500
+            return jsonify({"error": tr("Transkription misslyckades.")}), 500
 
     try:
         updated = proj_mod.add_transcript(STATE["folder"], STATE["project"], str(src_path), name, key=_key())
@@ -1203,7 +1264,7 @@ def add_transcript():
         return jsonify({"ok": True, "project": updated})
     except Exception:
         logger.exception("Legacy add_transcript failed: %s", src_path)
-        return jsonify({"error": "Kunde inte lägga till transkript."}), 500
+        return jsonify({"error": tr("Kunde inte lägga till transkript.")}), 500
 
 
 @app.route("/api/transcripts/<tid>/text", methods=["GET"])
@@ -1213,7 +1274,7 @@ def get_transcript_text(tid):
         return err
     t = next((t for t in STATE["project"]["transcripts"] if t["id"] == tid), None)
     if not t:
-        return jsonify({"error": "Transkript hittades inte."}), 404
+        return jsonify({"error": tr("Transkript hittades inte.")}), 404
     text = proj_mod.get_transcript_text(STATE["folder"], t, key=_key())
     return jsonify({"text": text})
 
@@ -1226,14 +1287,14 @@ def update_transcript_text(tid):
         return err
     t = next((t for t in STATE["project"]["transcripts"] if t["id"] == tid), None)
     if not t:
-        return jsonify({"error": "Transkript hittades inte."}), 404
+        return jsonify({"error": tr("Transkript hittades inte.")}), 404
     text = (request.json or {}).get("text")
     if text is None:
-        return jsonify({"error": "text krävs."}), 400
+        return jsonify({"error": tr("text krävs.")}), 400
     try:
         txt_path = _safe_transcript_path(t["text_file"])
     except (ValueError, KeyError):
-        return jsonify({"error": "Ogiltig filsökväg."}), 400
+        return jsonify({"error": tr("Ogiltig filsökväg.")}), 400
     try:
         if _key():
             from core.crypto import encrypt_text_file
@@ -1242,7 +1303,7 @@ def update_transcript_text(tid):
             txt_path.write_text(text, encoding="utf-8")
     except Exception:
         logger.exception("update_transcript_text failed for tid=%s", tid)
-        return jsonify({"error": "Kunde inte spara texten."}), 500
+        return jsonify({"error": tr("Kunde inte spara texten.")}), 500
     return jsonify({"ok": True})
 
 
@@ -1314,13 +1375,13 @@ def get_audio(tid):
         return err
     t = next((t for t in STATE["project"]["transcripts"] if t["id"] == tid), None)
     if not t or not t.get("audio_file"):
-        return jsonify({"error": "Ingen ljudfil hittades."}), 404
+        return jsonify({"error": tr("Ingen ljudfil hittades.")}), 404
     try:
         audio_path = _safe_transcript_path(t["audio_file"])
     except ValueError:
-        return jsonify({"error": "Ogiltig filsökväg."}), 400
+        return jsonify({"error": tr("Ogiltig filsökväg.")}), 400
     if not audio_path.exists():
-        return jsonify({"error": "Ljudfilen saknas på disk."}), 404
+        return jsonify({"error": tr("Ljudfilen saknas på disk.")}), 404
     return send_from_directory(str(audio_path.parent), audio_path.name)
 
 
@@ -1332,13 +1393,13 @@ def get_source_image(tid):
         return err
     t = next((t for t in STATE["project"]["transcripts"] if t["id"] == tid), None)
     if not t or not t.get("source_file"):
-        return jsonify({"error": "Ingen källbild hittades."}), 404
+        return jsonify({"error": tr("Ingen källbild hittades.")}), 404
     try:
         img_path = _safe_transcript_path(t["source_file"])
     except ValueError:
-        return jsonify({"error": "Ogiltig filsökväg."}), 400
+        return jsonify({"error": tr("Ogiltig filsökväg.")}), 400
     if not img_path.exists():
-        return jsonify({"error": "Källbilden saknas på disk."}), 404
+        return jsonify({"error": tr("Källbilden saknas på disk.")}), 404
     # HEIC/HEIF not supported by browsers — convert to JPEG on-the-fly
     if img_path.suffix.lower() in (".heic", ".heif"):
         data = _heic_to_jpeg_bytes(img_path)
@@ -1457,10 +1518,10 @@ def ocr_transcript_photos(tid):
         return err
     t = next((t for t in STATE["project"]["transcripts"] if t["id"] == tid), None)
     if not t:
-        return jsonify({"error": "Transkriptet hittades inte."}), 404
+        return jsonify({"error": tr("Transkriptet hittades inte.")}), 404
     photos = t.get("photos", [])
     if not photos:
-        return jsonify({"error": "Inga foton att OCR:a."}), 400
+        return jsonify({"error": tr("Inga foton att OCR:a.")}), 400
     photo_paths = []
     for p in photos:
         try:
@@ -1470,7 +1531,7 @@ def ocr_transcript_photos(tid):
         except ValueError:
             pass
     if not photo_paths:
-        return jsonify({"error": "Fotofiler saknas på disk."}), 404
+        return jsonify({"error": tr("Fotofiler saknas på disk.")}), 404
     job_id = str(uuid.uuid4())
     JOBS[job_id] = {"status": "pending", "stage": "pending", "progress": 0.0, "result": None, "error": None}
     threading.Thread(
@@ -1533,13 +1594,13 @@ def rename_transcript(tid):
         return err
     new_name = (request.json.get("name") or "").strip()
     if not new_name:
-        return jsonify({"error": "Namn får inte vara tomt."}), 400
+        return jsonify({"error": tr("Namn får inte vara tomt.")}), 400
     for t in STATE["project"]["transcripts"]:
         if t["id"] == tid:
             t["name"] = new_name
             break
     else:
-        return jsonify({"error": "Transkript hittades inte."}), 404
+        return jsonify({"error": tr("Transkript hittades inte.")}), 404
     proj_mod.save_project(STATE["folder"], STATE["project"], key=_key())
     return jsonify({"ok": True, "name": new_name})
 
@@ -1581,12 +1642,36 @@ def categorize_transcripts():
     category = data.get("category")
     if isinstance(category, str):
         category = category.strip() or None
-    for tr in STATE["project"]["transcripts"]:
-        if tr["id"] in tids:
+    for trn in STATE["project"]["transcripts"]:
+        if trn["id"] in tids:
             if category is None:
-                tr.pop("category", None)
+                trn.pop("category", None)
             else:
-                tr["category"] = category
+                trn["category"] = category
+    proj_mod.save_project(STATE["folder"], STATE["project"], key=_key())
+    return jsonify({"ok": True, "project": STATE["project"]})
+
+
+@app.route("/api/transcripts/tag", methods=["PATCH"])
+def tag_transcripts():
+    err = _require_project()
+    if err:
+        return err
+    data = request.json or {}
+    tids = set(data.get("tids") or [])
+    add = [s.strip() for s in (data.get("add") or []) if isinstance(s, str) and s.strip()]
+    remove = set(s.strip() for s in (data.get("remove") or []) if isinstance(s, str) and s.strip())
+    replace = data.get("set")
+    for trn in STATE["project"]["transcripts"]:
+        if trn["id"] not in tids:
+            continue
+        if replace is not None:
+            trn["tags"] = sorted({s.strip() for s in replace if isinstance(s, str) and s.strip()})
+        else:
+            current = set(trn.get("tags") or [])
+            current.update(add)
+            current.difference_update(remove)
+            trn["tags"] = sorted(current)
     proj_mod.save_project(STATE["folder"], STATE["project"], key=_key())
     return jsonify({"ok": True, "project": STATE["project"]})
 
@@ -1602,7 +1687,7 @@ def get_stats():
         return err
     from core.stats import compute_stats
     tid = request.args.get("tid") or None
-    return jsonify(compute_stats(STATE["folder"], STATE["project"], tid))
+    return jsonify(compute_stats(STATE["folder"], STATE["project"], tid, key=_key()))
 
 
 # ---------------------------------------------------------------------------
@@ -1617,16 +1702,20 @@ def get_irr(tid):
     coder_a = request.args.get("coder_a", "").strip()
     coder_b = request.args.get("coder_b", "").strip()
     if not coder_a or not coder_b:
-        return jsonify({"error": "coder_a och coder_b krävs."}), 400
+        return jsonify({"error": tr("coder_a och coder_b krävs.")}), 400
     if coder_a == coder_b:
-        return jsonify({"error": "Välj två olika kodare."}), 400
+        return jsonify({"error": tr("Välj två olika kodare.")}), 400
     from core.irr import cohens_kappa
     try:
-        result = cohens_kappa(STATE["folder"], STATE["project"], tid, coder_a, coder_b)
+        result = cohens_kappa(STATE["folder"], STATE["project"], tid, coder_a, coder_b,
+                              key=_key())
         return jsonify(result)
+    except ValueError as e:
+        # User-facing reasons from irr.py (already translated)
+        return jsonify({"error": str(e)}), 400
     except Exception:
         logger.exception("IRR calculation failed")
-        return jsonify({"error": "Kunde inte beräkna IRR."}), 500
+        return jsonify({"error": tr("Kunde inte beräkna IRR.")}), 500
 
 
 @app.route("/api/coders", methods=["GET"])
@@ -1669,7 +1758,7 @@ def add_code():
     data = request.json
     name = data.get("name", "").strip()
     if not name:
-        return jsonify({"error": "name krävs."}), 400
+        return jsonify({"error": tr("name krävs.")}), 400
     STATE["project"] = cb_mod.add_code(
         STATE["project"],
         name=name,
@@ -1754,7 +1843,7 @@ def merge_codes_route():
         return jsonify({"error": str(e)}), 400
     except Exception:
         logger.exception("merge_codes failed")
-        return jsonify({"error": "Kunde inte slå ihop koderna."}), 500
+        return jsonify({"error": tr("Kunde inte slå ihop koderna.")}), 500
 
 
 # ---------------------------------------------------------------------------
@@ -1790,7 +1879,7 @@ def add_annotation(tid):
     if kind == "point":
         required = {"code_id", "x", "y"}
         if not required.issubset(data):
-            return jsonify({"error": f"Fält saknas: {required - data.keys()}"}), 400
+            return jsonify({"error": tr("Fält saknas: {fields}", fields=", ".join(sorted(required - data.keys())))}), 400
         ann = ann_mod.add_annotation(
             STATE["folder"], tid, STATE["coder"],
             code_id=data["code_id"],
@@ -1804,7 +1893,7 @@ def add_annotation(tid):
     else:
         required = {"code_id", "start", "end", "text"}
         if not required.issubset(data):
-            return jsonify({"error": f"Fält saknas: {required - data.keys()}"}), 400
+            return jsonify({"error": tr("Fält saknas: {fields}", fields=", ".join(sorted(required - data.keys())))}), 400
         ann = ann_mod.add_annotation(
             STATE["folder"], tid, STATE["coder"],
             code_id=data["code_id"],
@@ -1842,28 +1931,82 @@ def delete_annotation(tid, ann_id):
 # Merge / collaboration routes
 # ---------------------------------------------------------------------------
 
+def _import_codings(data: dict):
+    """Merge a codings file (bundle or legacy) into the open project."""
+    with _PROJECT_LOCK:
+        current = proj_mod.reload_project(STATE["folder"], key=_key())
+        # New codes are saved before any annotation that points to them
+        updated, report = merge_mod.import_coder_bundle(
+            STATE["folder"], current, data, key=_key(),
+            save_project=lambda p: proj_mod.save_project(STATE["folder"], p, key=_key()))
+        STATE["project"] = updated
+    return jsonify({"ok": True, "project": updated, **report})
+
+
 @app.route("/api/merge", methods=["POST"])
 def merge():
+    """Legacy: import a codings file by local path."""
     err = _require_project()
     if err:
         return err
-    data = request.json
+    data = request.json or {}
     src = data.get("path", "").strip()
     if not src:
-        return jsonify({"error": "path krävs."}), 400
+        return jsonify({"error": tr("path krävs.")}), 400
     src_path = Path(src).resolve()
     if not src_path.is_file():
-        return jsonify({"error": "Filen hittades inte."}), 400
+        return jsonify({"error": tr("Filen hittades inte.")}), 400
     if src_path.suffix.lower() != ".json":
-        return jsonify({"error": "Filen måste vara en JSON-fil (.json)."}), 400
+        return jsonify({"error": tr("Filen måste vara en JSON-fil (.json).")}), 400
     try:
-        result = merge_mod.import_coder_file(STATE["folder"], str(src_path), key=_key())
-        return jsonify({"ok": True, **result})
+        return _import_codings(merge_mod.read_codings_file(str(src_path), key=_key()))
     except ValueError as e:
-        return jsonify({"error": str(e)}), 400
+        return jsonify({"error": tr(str(e))}), 400
     except Exception:
         logger.exception("Merge failed: %s", src_path)
-        return jsonify({"error": "Importen misslyckades."}), 500
+        return jsonify({"error": tr("Importen misslyckades.")}), 500
+
+
+@app.route("/api/codings/import", methods=["POST"])
+def import_codings_upload():
+    """Import a codings file chosen in the file picker (multipart 'file')."""
+    err = _require_project()
+    if err:
+        return err
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"error": tr("Ingen fil bifogad.")}), 400
+    if not f.filename.lower().endswith(".json"):
+        return jsonify({"error": tr("Filen måste vara en JSON-fil (.json).")}), 400
+    import tempfile
+    tmp = tempfile.NamedTemporaryFile(suffix=".json", delete=False)
+    try:
+        f.save(tmp.name)
+        tmp.close()
+        data = merge_mod.read_codings_file(tmp.name, key=_key())
+        return _import_codings(data)
+    except ValueError as e:
+        return jsonify({"error": tr(str(e))}), 400
+    except Exception:
+        logger.exception("Codings import failed: %s", f.filename)
+        return jsonify({"error": tr("Importen misslyckades.")}), 500
+    finally:
+        Path(tmp.name).unlink(missing_ok=True)
+
+
+@app.route("/api/codings/export", methods=["GET"])
+def export_codings():
+    """Download the active coder's annotations as a codings file."""
+    err = _require_project()
+    if err:
+        return err
+    bundle = merge_mod.export_coder_bundle(
+        STATE["folder"], STATE["project"], STATE["coder"], key=_key())
+    safe_coder = _ascii_slug(STATE["coder"]) or "coder"
+    fname = _export_filename(f"{tr('kodningar')}_{safe_coder}", "json")
+    return Response(json.dumps(bundle, ensure_ascii=False, indent=2),
+                    mimetype="application/json",
+                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
 @app.route("/api/transcripts/<tid>/conflicts", methods=["GET"])
@@ -1879,14 +2022,24 @@ def get_conflicts(tid):
 # Export routes
 # ---------------------------------------------------------------------------
 
+def _ascii_slug(text: str) -> str:
+    """ASCII-only file-name part: Werkzeug's dev server encodes headers as
+    Latin-1, so e.g. "Łukasz" in Content-Disposition would abort the response.
+    Accents are dropped (Åsa → Asa) and anything else becomes "_"."""
+    import re
+    import unicodedata
+    plain = unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode("ascii")
+    return re.sub(r"[^A-Za-z0-9\-]+", "_", plain).strip("_")
+
+
 def _export_filename(stem: str, ext: str) -> str:
     """Build a safe filename: <stem>_<project>_<datetime>.<ext>"""
     from datetime import datetime as _dt
     import re
     proj_name = STATE.get("project", {}).get("name", "") if STATE.get("project") else ""
-    safe = re.sub(r"[^\w\-]+", "_", proj_name).strip("_") if proj_name else ""
+    safe = _ascii_slug(proj_name)
     dt_str = _dt.now().strftime("%Y-%m-%d_%H%M")
-    parts = [stem]
+    parts = [_ascii_slug(tr(stem))]
     if safe:
         parts.append(safe)
     parts.append(dt_str)
@@ -1984,7 +2137,7 @@ def export_md_transcript(tid):
     coder = request.args.get("coder", STATE["coder"])
     md = exp_mod.export_markdown_transcript(STATE["folder"], STATE["project"], tid, coder, key=_key())
     return app.response_class(md, mimetype="text/markdown",
-                              headers={"Content-Disposition": f'attachment; filename="{_export_filename(f"transkript_{tid}", "md")}"'})
+                              headers={"Content-Disposition": f'attachment; filename="{_export_filename(tr("transkript") + "_" + tid, "md")}"'})
 
 
 # ---------------------------------------------------------------------------
@@ -2010,13 +2163,13 @@ def export_code_matrix_csv():
     data = compute_code_matrix(STATE["folder"], STATE["project"], key=_key())
     buf = io.StringIO()
     w = csv.writer(buf)
-    header = ["Transkript"] + [c["name"] for c in data["codes"]]
+    header = [tr("Transkript")] + [c["name"] for c in data["codes"]]
     w.writerow(header)
     for t in data["transcripts"]:
         row = [t["name"]] + [data["matrix"].get(t["id"], {}).get(c["id"], 0)
                               for c in data["codes"]]
         w.writerow(row)
-    totals_row = ["TOTALT"] + [data["totals"].get(c["id"], 0) for c in data["codes"]]
+    totals_row = [tr("TOTALT")] + [data["totals"].get(c["id"], 0) for c in data["codes"]]
     w.writerow(totals_row)
     return app.response_class(
         buf.getvalue().encode("utf-8-sig"),
@@ -2090,7 +2243,7 @@ def get_anchor_quote(code_id):
         return err
     from core.annotation import load_all_coders as _load_all
     for t in STATE["project"].get("transcripts", []):
-        all_coders = _load_all(STATE["folder"], t["id"])
+        all_coders = _load_all(STATE["folder"], t["id"], key=_key())
         for coder_anns in all_coders.values():
             for ann in coder_anns:
                 if ann.get("code_id") == code_id and ann.get("anchor"):
@@ -2108,7 +2261,7 @@ def get_all_anchors():
     from core.annotation import load_all_coders as _load_all
     result = {}
     for t in STATE["project"].get("transcripts", []):
-        all_coders = _load_all(STATE["folder"], t["id"])
+        all_coders = _load_all(STATE["folder"], t["id"], key=_key())
         for coder_anns in all_coders.values():
             for ann in coder_anns:
                 cid = ann.get("code_id")
@@ -2152,7 +2305,7 @@ def add_formatting(tid):
         return jsonify({"ok": True, "span": span})
     except Exception:
         logger.exception("add_format_span failed for tid=%s", tid)
-        return jsonify({"error": "Kunde inte lägga till formatering."}), 500
+        return jsonify({"error": tr("Kunde inte lägga till formatering.")}), 500
 
 
 @app.route("/api/transcripts/<tid>/formatting/<span_id>", methods=["DELETE"])
@@ -2183,7 +2336,7 @@ def export_analysis():
     err = _require_project()
     if err:
         return err
-    from core.analysis import gather_excerpts
+    from core.analysis import gather_excerpts, filter_excerpts_by_tags
     from core import analysis_export as aexp
 
     data = request.json or {}
@@ -2192,9 +2345,12 @@ def export_analysis():
     code_ids = data.get("code_ids")
     excerpt_ids = data.get("excerpt_ids")
     anchor_only = data.get("anchor_only", False)
+    tags = data.get("tags") or []
+    tag_mode = data.get("tag_mode", "any")
 
     result = gather_excerpts(STATE["folder"], STATE["project"], key=_key())
-    excerpts = result["excerpts"]
+    excerpts = filter_excerpts_by_tags(result["excerpts"], STATE["project"],
+                                       tags, tag_mode)
 
     if code_ids:
         code_set = set(code_ids)
@@ -2205,24 +2361,22 @@ def export_analysis():
     if anchor_only:
         excerpts = [e for e in excerpts if e.get("anchor")]
 
-    pname = STATE["project"].get("name", "analys")
-
     if fmt == "md":
         content = aexp.export_analysis_md(STATE["project"], excerpts, mode)
         return Response(content, mimetype="text/markdown",
-                        headers={"Content-Disposition": f"attachment; filename={pname}_analys.md"})
+                        headers={"Content-Disposition": f'attachment; filename="{_export_filename("analys", "md")}"'})
     elif fmt == "csv":
         content = aexp.export_analysis_csv(STATE["project"], excerpts, mode)
         return Response(content, mimetype="text/csv",
-                        headers={"Content-Disposition": f"attachment; filename={pname}_analys.csv"})
+                        headers={"Content-Disposition": f'attachment; filename="{_export_filename("analys", "csv")}"'})
     elif fmt == "docx":
         content = aexp.export_analysis_docx(STATE["project"], excerpts, mode)
         return Response(content, mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        headers={"Content-Disposition": f"attachment; filename={pname}_analys.docx"})
+                        headers={"Content-Disposition": f'attachment; filename="{_export_filename("analys", "docx")}"'})
     elif fmt == "odt":
         content = aexp.export_analysis_odt(STATE["project"], excerpts, mode)
         return Response(content, mimetype="application/vnd.oasis.opendocument.text",
-                        headers={"Content-Disposition": f"attachment; filename={pname}_analys.odt"})
+                        headers={"Content-Disposition": f'attachment; filename="{_export_filename("analys", "odt")}"'})
     else:
         return jsonify({"error": f"Unknown format: {fmt}"}), 400
 
@@ -2265,17 +2419,18 @@ def export_to_folder():
     data = request.json or {}
     dest_str = (data.get("folder") or "").strip()
     formats = data.get("formats") or []
-    tid = data.get("tid") or None
+    tid = data.get("tid") or None  # None = whole project (CSV / MD per code)
+    current_tid = data.get("current_tid") or tid  # for "this transcript"
 
     if not dest_str:
-        return jsonify({"error": "Ingen mapp angiven."}), 400
+        return jsonify({"error": tr("Ingen mapp angiven.")}), 400
 
     dest = Path(dest_str)
     try:
         dest.mkdir(parents=True, exist_ok=True)
     except Exception:
         logger.exception("export_to_folder mkdir failed: %s", dest_str)
-        return jsonify({"error": "Kunde inte skapa exportmappen."}), 400
+        return jsonify({"error": tr("Kunde inte skapa exportmappen.")}), 400
 
     written = []
     errors = []
@@ -2326,13 +2481,14 @@ def export_to_folder():
             logger.exception("export md_codebook failed")
             errors.append("md_codebook")
 
-    if "md_transcript" in formats:
-        if not tid:
-            return jsonify({"error": "Inget transkript öppet för detta exportformat."}), 400
+    if "md_transcript" in formats and not current_tid:
+        # Skip this format only — the others may already have been written
+        errors.append(tr("Inget transkript öppet för detta exportformat."))
+    elif "md_transcript" in formats:
         try:
             coder = STATE["coder"]
-            md = exp_mod.export_markdown_transcript(STATE["folder"], STATE["project"], tid, coder, key=_key())
-            fname = _export_filename(f"transkript_{tid}", "md")
+            md = exp_mod.export_markdown_transcript(STATE["folder"], STATE["project"], current_tid, coder, key=_key())
+            fname = _export_filename(tr("transkript") + "_" + current_tid, "md")
             (dest / fname).write_text(md, encoding="utf-8")
             written.append(fname)
         except Exception:

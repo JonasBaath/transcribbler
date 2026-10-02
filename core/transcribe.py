@@ -1043,14 +1043,10 @@ def transcribe_with_diarization(audio_path: str, hf_token: str,
         return merged
 
     def _looks_like_garbage(text: str) -> bool:
-        """Spurious Whisper output on noisy segments is often a single
-        punctuation character or empty after stripping. Filter these."""
-        stripped = text.strip()
-        if len(stripped) < 2:
-            return True
-        if all(c in "!?.,;: ·-–—" for c in stripped):
-            return True
-        return False
+        """Spurious Whisper output on noisy segments is often a lone
+        punctuation character. Applied per word, so a length check would
+        drop real one-letter words ("i", "å", "ö") — require a letter/digit."""
+        return not any(c.isalnum() for c in text)
 
     # Build the primary output from Whisper segments, splitting any segment
     # that spans a pyannote speaker change into separate pieces (text

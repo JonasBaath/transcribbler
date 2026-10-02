@@ -33,10 +33,10 @@ const TRANSLATIONS = {
     "btn.tools":             "Verktyg ▾",
     "exp.csv":               "CSV (alla)",
     "exp.csv.tidy":          "CSV tidy (R/Python)",
-    "exp.md.codes":          "Markdown – citat per kod",
+    "exp.md.codes":          "Markdown – utdrag per kod",
     "exp.md.codebook":       "Markdown – kodbok",
     "exp.md.transcript":     "Markdown – detta transkript",
-    "btn.merge":             "Slå ihop filer",
+    "btn.merge":             "Importera kodningar…",
     "btn.switch.project":    "Byt projekt",
     "btn.theme.to.dark":     "Mörkt",
     "btn.theme.to.light":    "Ljust",
@@ -49,6 +49,8 @@ const TRANSLATIONS = {
     // Transcript modal
     "trans.modal.title":     "Lägg till transkript",
     "trans.file.label":      "Välj fil (.txt, .docx, .mp3, .wav …)",
+    "trans.file.label.noaudio": "Välj fil (.txt, .docx, .md, .odt …)",
+    "error.audio.disabled":  "Ljudtranskribering är inte tillgänglig i den här versionen. Importera ett färdigt transkript i stället.",
     "trans.drop.text":       "Klicka för att välja fil, eller dra hit",
     "trans.name.label":      "Namn (valfritt — används om du väljer en enda fil)",
     "trans.name.ph":         "Anna, 2024-03-12",
@@ -76,14 +78,14 @@ const TRANSLATIONS = {
     "btn.remove":            "Ta bort",
     "btn.close":             "Stäng",
     // Merge modal
-    "merge.files.title":     "Slå ihop kodningsfiler",
-    "merge.desc":            "Klistra in sökvägen till en kollegas .json-kodningsfil.",
-    "merge.path.label":      "Sökväg till fil",
-    "merge.path.ph":         "/Users/du/Downloads/transkript1.bjorn.json",
+    "merge.files.title":     "Importera kodningar",
+    "merge.desc":            "Välj en kodningsfil (.json) som en annan kodare har skapat med Verktyg → Exportera mina kodningar.",
+    "merge.path.label":      "Kodningsfil",
     "btn.merge.confirm":     "Importera",
     // Context menu
     "ctx.search":             "🔍 Sök",
     "ctx.categorize":         "📁 Kategorisera",
+    "ctx.tag":                "🏷️ Tagga",
     "ctx.code.rename":        "✏️ Byt namn",
     "ctx.code.rename.prompt": "Nytt namn:",
     // Categorize modal
@@ -91,6 +93,27 @@ const TRANSLATIONS = {
     "cat.input.ph":           "Kategorinamn…",
     "btn.cat.remove":         "Ta bort kategori",
     "trans.uncategorized":    "Okategoriserade",
+    // Tag modal
+    "tag.modal.title":        "Tagga transkript",
+    "tag.input.ph":           "Lägg till tagg…",
+    "tag.empty":              "Inga taggar än.",
+    "transcript.load.failed": "Kunde inte ladda transkriptet. {error}",
+    "tag.remove":             "Ta bort",
+    "tag.partial":            "(delvis)",
+    "btn.add":                "Lägg till",
+    "btn.done":               "Klar",
+    "btn.apply":              "Använd",
+    // Analysis tag filter
+    "analysis.tag.all":              "Alla transkript",
+    "analysis.tag.filter.tooltip":   "Filtrera analysen på taggar",
+    "analysis.tag.filter.title":     "Filtrera analysen på taggar",
+    "analysis.tag.filter.any":       "Matcha någon",
+    "analysis.tag.filter.all":       "Matcha alla",
+    "analysis.tag.filter.clear":     "Rensa filter",
+    "analysis.tag.filter.notags":    "Inga taggar finns i projektet ännu. Tagga transkript i sidolisten via högerklick → 🏷️ Tagga.",
+    "analysis.tag.filter.meta":      "{tags} tagg(ar) valda · {n} av {total} transkript matchar",
+    "analysis.tag.filter.meta.none": "Inga taggar valda · alla {total} transkript ingår",
+    "analysis.tag.filter.label":     "{tags} tagg(ar) · {n}/{total} transkript",
     // Search
     "search.ph":              "Sök i transkript…",
     // Memo
@@ -114,16 +137,16 @@ const TRANSLATIONS = {
     "irr.col.code":           "Kod",
     "irr.col.coder_a":        "Kodare A (tecken)",
     "irr.col.coder_b":        "Kodare B (tecken)",
-    "irr.col.agreement":      "Gemensamt",
+    "irr.col.agreement":      "Överensstämmelse (tecken)",
     // Misc
     "confirm.del.transcript": "Ta bort \"{name}\"?",
-    "confirm.del.code":       "Ta bort koden? Kodningar som använder den förlorar sin kod.",
+    "confirm.del.code":       "Ta bort koden? Alla kodningar med koden raderas, för samtliga kodare. Underkoder flyttas upp en nivå. Det går inte att ångra.",
     "confirm.del.ann":        "Ta bort kodningen?",
     "alert.pick.transcript":  "Öppna ett transkript först.",
     "alert.pick.code":        "Välj en kod.",
     "error.fill.all":         "Fyll i alla fält.",
     "error.no.file":          "Välj minst en fil.",
-    "error.scribbler.no_password": "Ange lösenord för .scribbler-filen.",
+    "error.scribbler.no_password": "Ange lösenord för .scribbler-/.nsenc-filen.",
     "scribbler.password.label":    "Lösenord (från Notescribbler)",
     "scribbler.password.ph":       "Exportlösenord",
     // New features
@@ -131,7 +154,7 @@ const TRANSLATIONS = {
     "btn.codebook":              "Kodbok",
     "codebook.empty":            "Kodboken är tom.",
     "code.ann.count":            "Antal annoteringar",
-    "settings.trans.order":      "Alfabetisk ordning av transkript",
+    "settings.trans.order":      "Bokstavsetiketter för transkript (A., B., …)",
     "play.here":                 "Spela här",
     "ann.change.code":           "Klicka för att byta kod",
     "btn.project.search":     "Projektsök",
@@ -142,7 +165,7 @@ const TRANSLATIONS = {
     "ann.search.ph":          "Sök kod…",
     "alert.no.transcript.fmt": "Öppna ett transkript för att använda formatering.",
     // Diarization / audio upload
-    "diar.label":             "Diarization (talaridentifiering)",
+    "diar.label":             "Diarisering (talaridentifiering)",
     "diar.num.label":         "Antal talare:",
     "diar.num.ph":            "t.ex. 2",
     "diar.num.hint":          "Lämna tomt för automatisk detektering",
@@ -155,7 +178,7 @@ const TRANSLATIONS = {
     "diar.auto.identify":     "Identifiera min röst automatiskt",
     "diar.word.ts.label":     "Exakt talaruppdelning (word-level)",
     "diar.word.ts.warning":   "⚠ ~3× längre tid. 10 min ljud ≈ 50 min; 1 tim ≈ 5 tim.",
-    "image.ocr.label":        "Transkribera text-i-bild",
+    "image.ocr.label":        "Läs av text i bild (OCR)",
     "diar.voice.ready":       "Röstprofil sparad ✓",
     "diar.voice.none":        "Ingen röstprofil",
     "settings.auto.identify": "Identifiera mig automatiskt",
@@ -182,7 +205,7 @@ const TRANSLATIONS = {
     "progress.diarizing.cpu": "Identifierar talare (CPU — kan ta lång tid)…",
     "hint.image.pin":         "Klicka var som helst i bilden för att placera en kodpin. Dra en pin för att flytta den.",
     "btn.pin.mode":           "Placera kodpins (av/på)",
-    "progress.transcribing":  "Whisper transkriberar…",
+    "progress.transcribing":  "Transkriberar med Whisper…",
     "progress.done":          "Klart!",
     "spk.modal.title":        "Döp om talare",
     "spk.modal.hint":         "Ange valfria namn för varje talare (lämna tomt för att behålla automatiskt ID).",
@@ -222,19 +245,21 @@ const TRANSLATIONS = {
     "analysis.mode.nested":   "Kod-i-kod",
     "analysis.show.memos":    "Memos",
     "analysis.anchor.only":   "Nyckelpassage",
-    "analysis.export.mode":   "Exportväljare",
-    "analysis.export.mode.tooltip": "Aktivera för att välja enskilda citat att exportera",
+    "analysis.export.mode":   "Välj utdrag",
+    "analysis.export.mode.tooltip": "Aktivera för att välja enskilda utdrag att exportera",
     "analysis.export.title":  "Exportera analys",
     "analysis.export.codes":  "Exportera valda koder",
-    "analysis.export.excerpts": "Exportera markerade citat",
+    "analysis.export.excerpts": "Exportera markerade utdrag",
     "analysis.export.tooltip.disabled": "Välj koder för att exportera",
     "analysis.export.all":    "Exportera allt",
     "analysis.export.key":    "Exportera nyckelpassager",
     "analysis.empty":         "Välj koder i kodboken till vänster för att visa utdrag.",
     "analysis.no.match":      "Inga utdrag matchar filtren.",
     "analysis.search.ph":     "Sök i utdrag…",
+    "analysis.jump.tooltip":  "Klicka för att visa citatet i transkriptet",
+    "analysis.jump.other.coder": "Utdraget är kodat av {coder}. Öppna projektet som {coder} för att se kodningen.",
     "merge.codes.title":      "Slå ihop koder",
-    "merge.codes.desc":       "Alla annotationer från källkoden flyttas till målkoden. Källkoden tas bort.",
+    "merge.codes.desc":       "Alla kodningar från källkoden flyttas till målkoden. Källkoden tas bort.",
     "merge.source":           "Källkod (tas bort)",
     "merge.target":           "Målkod (behålls)",
     "merge.confirm":          "Slå ihop",
@@ -245,12 +270,12 @@ const TRANSLATIONS = {
     // Encryption
     "encrypt.label":          "Kryptera projekt",
     "encrypt.standard":       "Standardlösenord",
-    "encrypt.strong":         "Stark lösenfras",
+    "encrypt.strong":         "Starkt lösenord",
     "encrypt.pw":             "Lösenord",
     "encrypt.confirm":        "Bekräfta lösenord",
     "encrypt.pw.ph":          "Minst 8 tecken",
     "encrypt.confirm.ph":     "Upprepa lösenord",
-    "encrypt.warning":        "Spara lösenfrasen! Den kan inte återställas.",
+    "encrypt.warning":        "Spara lösenordet! Det kan inte återställas.",
     "encrypt.regen":          "Ny fras",
     "encrypt.copy":           "Kopiera",
     "encrypt.copied":         "Kopierad!",
@@ -264,10 +289,10 @@ const TRANSLATIONS = {
     "pw.hint.digit":          "Siffra",
     "pw.hint.special":        "Specialtecken",
     "pw.mismatch":            "Lösenorden matchar inte.",
-    "delete.title":           "Ta bort projekt",
+    "delete.title":           "Radera projektet permanent",
     "delete.warning":         "Det här tar bort projektet permanent. Projektfilen, transkript och annoteringar raderas. Eventuella exporterade filer i mappen behålls.",
     "delete.confirm.check":   "Jag förstår att detta inte kan ångras",
-    "delete.btn.confirm":     "Ta bort",
+    "delete.btn.confirm":     "Radera permanent",
     // Tooltips (title attributes)
     "tooltip.theme":               "Byt tema",
     "tooltip.settings":            "Inställningar",
@@ -305,7 +330,7 @@ const TRANSLATIONS = {
     // Color palette
     "palette.more.show":           "Visa fler ▾",
     "palette.more.hide":           "Visa färre ▴",
-    "palette.shades":              "Nyanser av föräldern",
+    "palette.shades":              "Nyanser av förälderns färg",
     // Confirm/alert modal defaults
     "modal.confirm.title":         "Bekräfta",
     "modal.alert.title":           "Meddelande",
@@ -342,7 +367,7 @@ const TRANSLATIONS = {
     "transcript.edit.warning":     "Det finns {n} kodning(ar) på detta transkript. Om du ändrar texten kan deras positioner bli felaktiga. Fortsätta ändå?",
     // Imports / merging
     "import.merge.success":        "Importerade {imported} kodningar från {coder} ({skipped} redan fanns).",
-    "uploads.failed.format":       "{n} fil(er) misslyckades: {names}. Försök igen för att retry:a.",
+    "uploads.failed.format":       "{n} fil(er) misslyckades: {names}. Klicka på Spara igen för att försöka på nytt.",
     // Empty states
     "empty.codes":                 "Inga koder ännu.",
     "empty.annotations":           "Inga annoteringar ännu.",
@@ -375,6 +400,38 @@ const TRANSLATIONS = {
     "backend.start.error.title":   "Transcribbler",
     "backend.start.error.body":    "Kunde inte starta Flask-servern.\nKontrollera att Python och beroenden är installerade.",
     "folder.picker.title":         "Välj projektmapp",
+    // Etiketter byggda i app.js (i18n-genomgång 2026-10-02)
+    "topbar.coder.badge": "Kodare: {coder}",
+    "progress.uploading": "Laddar upp…",
+    "ann.count.one": "{n} kodning",
+    "ann.count.other": "{n} kodningar",
+    "source.photo.alt": "Foto {n}",
+    "stats.summary": "Kodningar totalt: {n} · Transkript: {t}",
+    "irr.n.chars": "n = {n} tecken",
+    "codetree.png.filename": "kodtrad",
+    "ann.create.code": "+ Skapa \"{q}\"",
+    "matrix.total": "Totalt",
+    "analysis.load.error": "Kunde inte ladda data.",
+    "analysis.export.filename": "analys",
+    "analysis.png.generating": "Genererar PNG…",
+    "hf.verifying": "Verifierar…",
+    "zip.notice": "⚠ Zip-filen importeras som klartext — filerna är inte lösenordsskyddade. Välj <strong>.nsenc</strong> i Notescribbler för krypterad export.",
+    "model.tiny": "tiny (snabb, lägre kvalitet)",
+    "model.medium": "medium (rekommenderas)",
+    "model.large": "large-v3 (bäst kvalitet)",
+    "export.scope.label": "Omfattning",
+    "export.scope.project": "Hela projektet",
+    "export.scope.transcript": "Bara öppet transkript",
+    "export.scope.hint": "Gäller CSV och Markdown per kod. Kodbok och QDPX omfattar alltid hela projektet; \"detta transkript\" alltid det öppna.",
+    "export.partial.failed": "Misslyckades: {formats}",
+    "recent.remove.title": "Ta bort ur listan",
+    "recent.remove.desc": "Projektet försvinner bara ur listan Senaste projekt. Inga filer tas bort, och du kan öppna mappen igen när du vill.",
+    "recent.remove.btn": "Ta bort ur listan",
+    "btn.export.codings": "Exportera mina kodningar",
+    "import.merge.codes.created": "Nya koder skapades: {codes}",
+    "import.merge.unmatched": "Hittades inte i projektet (hoppades över): {names}",
+    "import.merge.text.changed": "Texten skiljer sig från kodarens version, så positionerna kan vara förskjutna: {names}",
+    "import.merge.unknown.code": "{n} kodningar hoppades över eftersom koden saknas.",
   },
 
   en: {
@@ -409,10 +466,10 @@ const TRANSLATIONS = {
     "btn.tools":             "Tools ▾",
     "exp.csv":               "CSV (all)",
     "exp.csv.tidy":          "CSV tidy (R/Python)",
-    "exp.md.codes":          "Markdown – quotes per code",
+    "exp.md.codes":          "Markdown – excerpts per code",
     "exp.md.codebook":       "Markdown – codebook",
     "exp.md.transcript":     "Markdown – this transcript",
-    "btn.merge":             "Merge files",
+    "btn.merge":             "Import codings…",
     "btn.switch.project":    "Switch project",
     "btn.theme.to.dark":     "Dark",
     "btn.theme.to.light":    "Light",
@@ -425,6 +482,8 @@ const TRANSLATIONS = {
     // Transcript modal
     "trans.modal.title":     "Add transcript",
     "trans.file.label":      "Choose file (.txt, .docx, .mp3, .wav …)",
+    "trans.file.label.noaudio": "Choose file (.txt, .docx, .md, .odt …)",
+    "error.audio.disabled":  "Audio transcription is not available in this version. Import a finished transcript instead.",
     "trans.drop.text":       "Click to choose file, or drag here",
     "trans.name.label":      "Name (optional — used if you select a single file)",
     "trans.name.ph":         "Anna, 2024-03-12",
@@ -440,7 +499,7 @@ const TRANSLATIONS = {
     "code.name.label":       "Name",
     "code.parent.label":     "Parent code (theme)",
     "code.parent.none":      "— none (top level) —",
-    "code.color.label":      "Color",
+    "code.color.label":      "Colour",
     "code.desc.label":       "Description",
     "btn.save":              "Save",
     "btn.delete.code":       "Delete code",
@@ -452,21 +511,42 @@ const TRANSLATIONS = {
     "btn.remove":            "Remove",
     "btn.close":             "Close",
     // Merge modal
-    "merge.files.title":     "Merge coding files",
-    "merge.desc":            "Paste the path to a colleague's .json coding file.",
-    "merge.path.label":      "File path",
-    "merge.path.ph":         "/Users/you/Downloads/transcript1.bjorn.json",
+    "merge.files.title":     "Import codings",
+    "merge.desc":            "Choose a codings file (.json) that another coder created with Tools → Export my codings.",
+    "merge.path.label":      "Codings file",
     "btn.merge.confirm":     "Import",
     // Context menu
     "ctx.search":             "🔍 Search",
-    "ctx.categorize":         "📁 Categorize",
+    "ctx.categorize":         "📁 Categorise",
+    "ctx.tag":                "🏷️ Tag",
     "ctx.code.rename":        "✏️ Rename",
     "ctx.code.rename.prompt": "New name:",
     // Categorize modal
-    "cat.modal.title":        "Categorize transcripts",
+    "cat.modal.title":        "Categorise transcripts",
     "cat.input.ph":           "Category name…",
     "btn.cat.remove":         "Remove category",
-    "trans.uncategorized":    "Uncategorized",
+    "trans.uncategorized":    "Uncategorised",
+    // Tag modal
+    "tag.modal.title":        "Tag transcripts",
+    "tag.input.ph":           "Add tag…",
+    "tag.empty":              "No tags yet.",
+    "transcript.load.failed": "Could not load the transcript. {error}",
+    "tag.remove":             "Remove",
+    "tag.partial":            "(partial)",
+    "btn.add":                "Add",
+    "btn.done":               "Done",
+    "btn.apply":              "Apply",
+    // Analysis tag filter
+    "analysis.tag.all":              "All transcripts",
+    "analysis.tag.filter.tooltip":   "Filter analysis by tags",
+    "analysis.tag.filter.title":     "Filter analysis by tags",
+    "analysis.tag.filter.any":       "Match any",
+    "analysis.tag.filter.all":       "Match all",
+    "analysis.tag.filter.clear":     "Clear filter",
+    "analysis.tag.filter.notags":    "No tags exist in this project yet. Tag transcripts in the sidebar via right-click → 🏷️ Tag.",
+    "analysis.tag.filter.meta":      "{tags} tag(s) selected · {n} of {total} transcripts match",
+    "analysis.tag.filter.meta.none": "No tags selected · all {total} transcripts included",
+    "analysis.tag.filter.label":     "{tags} tag(s) · {n}/{total} transcripts",
     // Search
     "search.ph":              "Search transcript…",
     // Memo
@@ -490,16 +570,16 @@ const TRANSLATIONS = {
     "irr.col.code":           "Code",
     "irr.col.coder_a":        "Coder A (chars)",
     "irr.col.coder_b":        "Coder B (chars)",
-    "irr.col.agreement":      "Shared",
+    "irr.col.agreement":      "Agreement (chars)",
     // Misc
     "confirm.del.transcript": "Delete \"{name}\"?",
-    "confirm.del.code":       "Delete this code? Annotations using it will lose their code.",
+    "confirm.del.code":       "Delete this code? All annotations with this code will be deleted, for every coder. Child codes move up one level. This cannot be undone.",
     "confirm.del.ann":        "Remove this annotation?",
     "alert.pick.transcript":  "Open a transcript first.",
     "alert.pick.code":        "Please select a code.",
     "error.fill.all":         "Please fill in all fields.",
     "error.no.file":          "Please select at least one file.",
-    "error.scribbler.no_password": "Enter password for the .scribbler file.",
+    "error.scribbler.no_password": "Enter the password for the .scribbler/.nsenc file.",
     "scribbler.password.label":    "Password (from Notescribbler)",
     "scribbler.password.ph":       "Export password",
     // New features
@@ -507,7 +587,7 @@ const TRANSLATIONS = {
     "btn.codebook":              "Codebook",
     "codebook.empty":            "The codebook is empty.",
     "code.ann.count":            "Annotation count",
-    "settings.trans.order":      "Alphabetical transcript labels",
+    "settings.trans.order":      "Letter labels for transcripts (A., B., …)",
     "play.here":                 "Play here",
     "ann.change.code":           "Click to change code",
     "btn.project.search":     "Project search",
@@ -518,7 +598,7 @@ const TRANSLATIONS = {
     "ann.search.ph":          "Search code…",
     "alert.no.transcript.fmt": "Open a transcript to use formatting.",
     // Diarization / audio upload
-    "diar.label":             "Diarization (speaker identification)",
+    "diar.label":             "Diarisation (speaker identification)",
     "diar.num.label":         "Number of speakers:",
     "diar.num.ph":            "e.g. 2",
     "diar.num.hint":          "Leave blank for automatic detection",
@@ -530,8 +610,8 @@ const TRANSLATIONS = {
     "diar.voices.soon":       "Voice profiles — coming soon",
     "diar.auto.identify":     "Identify my voice automatically",
     "diar.word.ts.label":     "Precise speaker attribution (word-level)",
-    "diar.word.ts.warning":   "⚠ ~3× slower. 10 min audio ≈ 50 min; 1 hr ≈ 5 hrs.",
-    "image.ocr.label":        "Transcribe text-in-image",
+    "diar.word.ts.warning":   "⚠ ~3× slower. 10 min of audio ≈ 50 min; 1 h ≈ 5 h.",
+    "image.ocr.label":        "Extract text from image (OCR)",
     "diar.voice.ready":       "Voice profile saved ✓",
     "diar.voice.none":        "No voice profile",
     "settings.auto.identify": "Identify me automatically",
@@ -558,7 +638,7 @@ const TRANSLATIONS = {
     "progress.diarizing.cpu": "Identifying speakers (CPU — this may take a long time)…",
     "hint.image.pin":         "Click anywhere on the image to place a code pin. Drag a pin to move it.",
     "btn.pin.mode":           "Place code pins (toggle)",
-    "progress.transcribing":  "Whisper transcribing…",
+    "progress.transcribing":  "Transcribing with Whisper…",
     "progress.done":          "Done!",
     "spk.modal.title":        "Name speakers",
     "spk.modal.hint":         "Enter names for each speaker (leave blank to keep automatic ID).",
@@ -567,13 +647,13 @@ const TRANSLATIONS = {
     "batch.spk.hint":         "Transcription complete. Enter speaker names for each file — leave blank to keep automatic IDs.",
     "batch.spk.save":         "Save all",
     "batch.spk.skip":         "Save with default names",
-    "batch.spk.none":         "No speakers identified — will be saved as transcript without speaker names.",
+    "batch.spk.none":         "No speakers identified — will be saved as a transcript without speaker names.",
     // Language / model choice
     "trans.lang_choice.label": "Transcription model",
-    "lang.autodetect":        "Autodetect — KB-Whisper (recommended)",
+    "lang.autodetect":        "Auto-detect — KB-Whisper (recommended)",
     "lang.sv":                "Swedish — KB-Whisper",
     "lang.en":                "English — Whisper",
-    "lang.other":             "Other — Whisper (autodetect)",
+    "lang.other":             "Other — Whisper (auto-detect)",
     // Codebook search
     "codebook.search.ph":     "Filter codes…",
     // Undo / redo
@@ -598,8 +678,8 @@ const TRANSLATIONS = {
     "analysis.mode.nested":   "Code-in-code",
     "analysis.show.memos":    "Memos",
     "analysis.anchor.only":   "Key passages",
-    "analysis.export.mode":   "Export selector",
-    "analysis.export.mode.tooltip": "Enable to select individual quotes for export",
+    "analysis.export.mode":   "Select excerpts",
+    "analysis.export.mode.tooltip": "Enable to select individual excerpts for export",
     "analysis.export.title":  "Export analysis",
     "analysis.export.codes":  "Export selected codes",
     "analysis.export.excerpts": "Export selected excerpts",
@@ -609,6 +689,8 @@ const TRANSLATIONS = {
     "analysis.empty":         "Select codes in the codebook to show excerpts.",
     "analysis.no.match":      "No excerpts match the filters.",
     "analysis.search.ph":     "Search excerpts…",
+    "analysis.jump.tooltip":  "Click to jump to the excerpt in the transcript",
+    "analysis.jump.other.coder": "This excerpt was coded by {coder}. Open the project as {coder} to see the coding.",
     "merge.codes.title":      "Merge codes",
     "merge.codes.desc":       "All annotations from the source code are moved to the target code. The source code is removed.",
     "merge.source":           "Source code (removed)",
@@ -641,10 +723,10 @@ const TRANSLATIONS = {
     "pw.hint.special":        "Special character",
     "pw.mismatch":            "Passwords do not match.",
     // Delete project
-    "delete.title":           "Delete project",
+    "delete.title":           "Delete the project permanently",
     "delete.warning":         "This will permanently delete the project. The project file, transcripts and annotations will be removed. Any exported files in the folder will be kept.",
     "delete.confirm.check":   "I understand this cannot be undone",
-    "delete.btn.confirm":     "Delete",
+    "delete.btn.confirm":     "Delete permanently",
     // Tooltips (title attributes)
     "tooltip.theme":               "Toggle theme",
     "tooltip.settings":            "Settings",
@@ -682,7 +764,7 @@ const TRANSLATIONS = {
     // Color palette
     "palette.more.show":           "Show more ▾",
     "palette.more.hide":           "Show less ▴",
-    "palette.shades":              "Shades of parent",
+    "palette.shades":              "Shades of parent colour",
     // Confirm/alert modal defaults
     "modal.confirm.title":         "Confirm",
     "modal.alert.title":           "Notice",
@@ -692,7 +774,7 @@ const TRANSLATIONS = {
     "tip.diar.seg.low":            "Lower: picks up more, risk of noise",
     "tip.diar.seg.rule":           "Rule of thumb: start at 0.50 and raise if you get too many short segments.",
     "tip.diar.clu.title":          "How similar voices must be to count as the same speaker.",
-    "tip.diar.clu.high":           "Raise if a person is split across several",
+    "tip.diar.clu.high":           "Raise if one person is split across several speakers",
     "tip.diar.clu.low":            "Lower if different speakers are merged",
     "tip.diar.clu.rule":           "Rule of thumb: start at 0.70.",
     // Batch progress
@@ -719,7 +801,7 @@ const TRANSLATIONS = {
     "transcript.edit.warning":     "There are {n} annotation(s) on this transcript. If you change the text, their positions may become incorrect. Continue anyway?",
     // Imports / merging
     "import.merge.success":        "Imported {imported} annotations from {coder} ({skipped} already existed).",
-    "uploads.failed.format":       "{n} file(s) failed: {names}. Try again to retry.",
+    "uploads.failed.format":       "{n} file(s) failed: {names}. Click Save again to retry.",
     // Empty states
     "empty.codes":                 "No codes yet.",
     "empty.annotations":           "No annotations yet.",
@@ -752,16 +834,64 @@ const TRANSLATIONS = {
     "backend.start.error.title":   "Transcribbler",
     "backend.start.error.body":    "Could not start the Flask server.\nMake sure Python and dependencies are installed.",
     "folder.picker.title":         "Choose project folder",
+    // Labels built in app.js (i18n review 2026-10-02)
+    "topbar.coder.badge": "Coder: {coder}",
+    "progress.uploading": "Uploading…",
+    "ann.count.one": "{n} annotation",
+    "ann.count.other": "{n} annotations",
+    "source.photo.alt": "Photo {n}",
+    "stats.summary": "Total annotations: {n} · Transcripts: {t}",
+    "irr.n.chars": "n = {n} characters",
+    "codetree.png.filename": "code_tree",
+    "ann.create.code": "+ Create \"{q}\"",
+    "matrix.total": "Total",
+    "analysis.load.error": "Could not load data.",
+    "analysis.export.filename": "analysis",
+    "analysis.png.generating": "Generating PNG…",
+    "hf.verifying": "Verifying…",
+    "zip.notice": "⚠ The zip file is imported as plain text — the files are not password-protected. Choose <strong>.nsenc</strong> in Notescribbler for an encrypted export.",
+    "model.tiny": "tiny (fast, lower quality)",
+    "model.medium": "medium (recommended)",
+    "model.large": "large-v3 (best quality)",
+    "export.scope.label": "Scope",
+    "export.scope.project": "Whole project",
+    "export.scope.transcript": "Open transcript only",
+    "export.scope.hint": "Applies to CSV and Markdown per code. The codebook and QDPX always cover the whole project; \"this transcript\" is always the open one.",
+    "export.partial.failed": "Failed: {formats}",
+    "recent.remove.title": "Remove from list",
+    "recent.remove.desc": "The project is only removed from the Recent projects list. No files are deleted, and you can open the folder again at any time.",
+    "recent.remove.btn": "Remove from list",
+    "btn.export.codings": "Export my codings",
+    "import.merge.codes.created": "New codes created: {codes}",
+    "import.merge.unmatched": "Not found in this project (skipped): {names}",
+    "import.merge.text.changed": "The text differs from the coder's version, so positions may be shifted: {names}",
+    "import.merge.unknown.code": "{n} annotations skipped because their code is missing.",
   },
 };
 
 const LANG_KEY = "transcribbler_lang";
-let currentLang = localStorage.getItem(LANG_KEY) || "sv";
+// Without a saved choice: Swedish if the system language is Swedish,
+// otherwise English.
+function _systemLang() {
+  const langs = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || ""];
+  return String(langs[0] || "").toLowerCase().startsWith("sv") ? "sv" : "en";
+}
+let currentLang = (() => {
+  try { return localStorage.getItem(LANG_KEY) || _systemLang(); }
+  catch (_) { return _systemLang(); }
+})();
+
+// The backend reads the language from this cookie (error messages, exported
+// documents and file names); it accompanies every same-origin request.
+function _syncLangCookie() {
+  document.cookie = `transcribbler_lang=${currentLang}; path=/; max-age=31536000; SameSite=Strict`;
+}
+_syncLangCookie();
 
 function t(key, vars = {}) {
   let str = (TRANSLATIONS[currentLang] || TRANSLATIONS.sv)[key] || key;
   for (const [k, v] of Object.entries(vars)) {
-    str = str.replace(`{${k}}`, v);
+    str = str.replaceAll(`{${k}}`, v);
   }
   return str;
 }
@@ -769,6 +899,7 @@ function t(key, vars = {}) {
 function setLang(lang) {
   currentLang = lang;
   localStorage.setItem(LANG_KEY, lang);
+  _syncLangCookie();
   applyTranslations();
 }
 
@@ -787,6 +918,18 @@ function applyTranslations() {
   document.querySelectorAll("[data-i18n-title]").forEach(el => {
     el.title = t(el.dataset.i18nTitle);
   });
+
+  // innerHTML for strings with markup (translations are trusted, static)
+  document.querySelectorAll("[data-i18n-html]").forEach(el => {
+    el.innerHTML = t(el.dataset.i18nHtml);
+  });
+  document.querySelectorAll("[data-i18n-alt]").forEach(el => {
+    el.alt = t(el.dataset.i18nAlt);
+  });
+  // Labels built in app.js (coder badge, counts, tag filter)
+  if (typeof refreshDynamicLabels === "function") {
+    try { refreshDynamicLabels(); } catch (_) {}
+  }
 
   // Update both lang toggle buttons (topbar + splash)
   const langLabel = currentLang === "sv" ? "EN" : "SV";

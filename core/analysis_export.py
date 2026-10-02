@@ -4,6 +4,7 @@ analysis_export.py — Export analysis view excerpts in various formats.
 import csv
 import io
 from .export import _code_path
+from .i18n import tr
 
 
 def _group_excerpts(excerpts, mode):
@@ -28,7 +29,7 @@ def _group_excerpts(excerpts, mode):
 
 def export_analysis_md(project, excerpts, mode="separate"):
     """Export excerpts as Markdown."""
-    lines = [f"# Analys — {project['name']}\n"]
+    lines = [f"# {tr('Analys — {name}', name=project['name'])}\n"]
     grouped = _group_excerpts(excerpts, mode)
     for g in grouped:
         prefix = f"{g['code_number']}. " if g["code_number"] else ""
@@ -37,7 +38,7 @@ def export_analysis_md(project, excerpts, mode="separate"):
             label = e.get("transcript_label", "")
             name = e.get("transcript_name", "")
             anchor = " ◆" if e.get("anchor") else ""
-            lines.append(f"**{label}. {name}** _(kodare: {e['coder']})_{anchor}")
+            lines.append(f"**{label}. {name}** _({tr('kodare: {coder}', coder=e['coder'])})_{anchor}")
             lines.append(f"> {e['text']}\n")
             if e.get("memo"):
                 lines.append(f"> _Memo: {e['memo']}_\n")
@@ -76,7 +77,7 @@ def export_analysis_docx(project, excerpts, mode="separate"):
     from docx import Document
     from docx.shared import Pt, RGBColor
     doc = Document()
-    doc.add_heading(f"Analys — {project['name']}", level=0)
+    doc.add_heading(tr("Analys — {name}", name=project["name"]), level=0)
     grouped = _group_excerpts(excerpts, mode)
     for g in grouped:
         prefix = f"{g['code_number']}. " if g["code_number"] else ""
@@ -94,7 +95,7 @@ def export_analysis_docx(project, excerpts, mode="separate"):
             name = e.get("transcript_name", "")
             anchor = " ◆" if e.get("anchor") else ""
             p = doc.add_paragraph()
-            run = p.add_run(f"{label}. {name} (kodare: {e['coder']}){anchor}")
+            run = p.add_run(f"{label}. {name} ({tr('kodare: {coder}', coder=e['coder'])}){anchor}")
             run.bold = True
             run.font.size = Pt(10)
 
@@ -140,7 +141,7 @@ def export_analysis_odt(project, excerpts, mode="separate"):
     indent_style.addElement(pp)
     doc.automaticstyles.addElement(indent_style)
 
-    doc.text.addElement(H(outlinelevel=1, text=f"Analys — {project['name']}"))
+    doc.text.addElement(H(outlinelevel=1, text=tr("Analys — {name}", name=project["name"])))
 
     grouped = _group_excerpts(excerpts, mode)
     for g in grouped:
@@ -153,7 +154,7 @@ def export_analysis_odt(project, excerpts, mode="separate"):
             anchor = " ◆" if e.get("anchor") else ""
             p = P()
             s = Span(stylename=bold_style)
-            s.addText(f"{label}. {name} (kodare: {e['coder']}){anchor}")
+            s.addText(f"{label}. {name} ({tr('kodare: {coder}', coder=e['coder'])}){anchor}")
             p.addElement(s)
             doc.text.addElement(p)
 
