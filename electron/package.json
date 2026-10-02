@@ -19,8 +19,8 @@
     "prebuild:win": "bash prepare-runtime.sh",
     "prebuild:linux": "bash prepare-runtime.sh",
     "prebuild": "bash prepare-runtime.sh",
-    "build:mac": "electron-builder --mac",
-    "build:mac-intel": "PBS_ARCH=x86_64 bash prepare-runtime.sh && electron-builder --mac --x64",
+    "build:mac": "electron-builder --mac dmg:arm64",
+    "build:mac-intel": "PBS_ARCH=x86_64 bash prepare-runtime.sh && electron-builder --mac dmg:x64 && rm -rf python-runtime",
     "build:win": "electron-builder --win",
     "build:linux": "electron-builder --linux",
     "build": "electron-builder -mwl"
