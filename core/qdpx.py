@@ -120,6 +120,7 @@ def export_qdpx(folder: str, project: dict,
     # Sources
     sources_el = _sub(root, "Sources")
     transcripts = project.get("transcripts", [])
+    plain_texts = {}  # tid -> decrypted text written to sources/ below
 
     for t in transcripts:
         tid = t["id"]
@@ -135,6 +136,7 @@ def export_qdpx(folder: str, project: dict,
                 plain_text = txt_path.read_text(encoding="utf-8")
         else:
             plain_text = txt_path.read_text(encoding="utf-8")
+        plain_texts[tid] = plain_text
         internal_path = f"sources/{tid}.txt"
 
         src_el = _sub(
@@ -168,9 +170,7 @@ def export_qdpx(folder: str, project: dict,
                     endPosition=str(ann["end"]),
                 )
                 if ann.get("memo"):
-                    note_el = _sub(coding_el, "ModifyingUser", modifyingUser=coder_guid)
-                    # Memo stored as a NoteRef comment in description
-                    # (REFI-QDA has no native memo on Coding; use Description)
+                    # REFI-QDA has no native memo on Coding; use Description
                     desc_el = _sub(coding_el, "Description")
                     desc_el.text = ann["memo"]
 
@@ -188,10 +188,9 @@ def export_qdpx(folder: str, project: dict,
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("project.qde", xml_bytes.encode("utf-8"))
-        for t in transcripts:
-            tid = t["id"]
-            txt_path = folder_path / "transcripts" / f"{tid}.txt"
-            if txt_path.exists():
-                zf.write(txt_path, f"sources/{tid}.txt")
+        # Write the decrypted text — copying the files would put still-encrypted
+        # sources into the archive for encrypted projects.
+        for tid, plain_text in plain_texts.items():
+            zf.writestr(f"sources/{tid}.txt", plain_text.encode("utf-8"))
 
     return buf.getvalue()

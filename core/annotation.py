@@ -6,6 +6,7 @@ Each annotation stores character offsets into the plain-text transcript.
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -56,6 +57,25 @@ def save_annotations(folder: str, tid: str, coder: str, annotations: list,
 # ---------------------------------------------------------------------------
 # CRUD
 # ---------------------------------------------------------------------------
+
+_CODER_RE = re.compile(r"[^\W_][\w \-]{0,63}")
+
+
+def is_valid_coder_name(name: str) -> bool:
+    """
+    Coder names become part of file names (annotations/{tid}.{coder}.json),
+    so only letters, digits, spaces, hyphens and underscores are allowed —
+    no dots (load_all_coders treats them as sidecar files) and nothing that
+    is invalid on Windows (: * ? " < > | / \\).
+    """
+    return bool(name) and name == name.strip() and bool(_CODER_RE.fullmatch(name))
+
+
+def is_text_annotation(ann: dict) -> bool:
+    """True for character-range annotations; image pins (kind "point") have
+    x/y but no start/end and must be skipped by span-based computations."""
+    return ann.get("kind", "text") != "point" and "start" in ann and "end" in ann
+
 
 def add_annotation(folder: str, tid: str, coder: str,
                    code_id: str, memo: str = "",

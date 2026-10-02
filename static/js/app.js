@@ -145,6 +145,9 @@ let _savedSelRange = null;    // saved Selection range so popup focus doesn't co
 
 // Feature state — declared here so all functions can reference them
 let formattingSpans = [];
+// Server-side feature flags (GET /api/features). Whisper is off by default in
+// the teaching build — audio upload UI is hidden and audio files are refused.
+let FEATURES = { whisper: false };
 let numberingEnabled  = false;
 let transOrderEnabled = false;
 let selectedTids = new Set();   // multi-selected transcript ids
@@ -212,6 +215,8 @@ let _analysisState = {
   showMemos: false,
   anchorOnly: false,
   searchQuery: "",
+  selectedTags: new Set(),    // tom = ingen tagg-filtrering
+  tagFilterMode: "any",       // "any" | "all"
 };
 let _analysisActive = false;
 
@@ -342,7 +347,7 @@ async function loadRecentProjects() {
         <span class="recent-name">${esc(r.name)}</span>
         <span class="recent-path">${esc(r.folder)}</span>
       </span>
-      <button class="recent-delete" title="${t("delete.title") || "Ta bort"}">✕</button>`;
+      <button class="recent-delete" title="${escAttr(t("recent.remove.title"))}">✕</button>`;
     li.querySelector(".recent-delete").addEventListener("click", (e) => {
       e.stopPropagation();
       _showDeleteConfirm(r.folder, r.name);
@@ -552,6 +557,14 @@ document.getElementById("btn-delete-confirm").addEventListener("click", async ()
   }
 });
 
+document.getElementById("btn-recent-remove").addEventListener("click", async () => {
+  if (!_deleteFolder) return;
+  await POST("/api/project/recent/remove", { folder: _deleteFolder });
+  _deleteFolder = null;
+  document.getElementById("modal-delete-project").classList.add("hidden");
+  loadRecentProjects();
+});
+
 document.getElementById("btn-delete-cancel").addEventListener("click", () => {
   _deleteFolder = null;
   document.getElementById("modal-delete-project").classList.add("hidden");
@@ -566,7 +579,7 @@ function enterApp(proj, coder, folder) {
   document.getElementById("splash").classList.add("hidden");
   document.getElementById("app").classList.remove("hidden");
   document.getElementById("project-title").textContent = proj.name;
-  document.getElementById("coder-badge").textContent = `Kodare: ${coder}`;
+  document.getElementById("coder-badge").textContent = t("topbar.coder.badge", { coder });
   const nb = document.getElementById("setting-numbering");
   if (nb) nb.checked = numberingEnabled;
   const to = document.getElementById("setting-trans-order");
@@ -750,6 +763,8 @@ function resetAllProjectState() {
     showMemos: false,
     anchorOnly: false,
     searchQuery: "",
+    selectedTags: new Set(),
+    tagFilterMode: "any",
   };
   _analysisActive = false;
   _analysisLastCounter = -1;
@@ -846,7 +861,10 @@ function renderTranscriptList() {
     if (tr.id === currentTid) li.classList.add("active");
     if (selectedTids.has(tr.id)) li.classList.add("selected");
     const prefix = transOrderEnabled ? `<span class="trans-label">${transLabel(idx)}.</span> ` : "";
-    li.innerHTML = `<span class="drag-handle" title="${esc(t("tooltip.drag.reorder"))}">⋮⋮</span><span class="trans-name">${prefix}${esc(tr.name)}</span><span class="trans-del" title="${esc(t("tooltip.transcript.delete"))}">✕</span>`;
+    const tagsHtml = (tr.tags && tr.tags.length)
+      ? `<span class="trans-tags">${tr.tags.map(tag => `<span class="trans-tag-chip">${esc(tag)}</span>`).join("")}</span>`
+      : "";
+    li.innerHTML = `<span class="drag-handle" title="${esc(t("tooltip.drag.reorder"))}">⋮⋮</span><span class="trans-name">${prefix}${esc(tr.name)}</span>${tagsHtml}<span class="trans-del" title="${esc(t("tooltip.transcript.delete"))}">✕</span>`;
 
     // Only allow HTML5 drag when initiated from the drag handle
     const handle = li.querySelector(".drag-handle");
@@ -1069,14 +1087,16 @@ function updateFileList(files) {
   }
   dropText.textContent = "";
   const anyAudio = Array.from(files).some(f => isAudioFile(f.name));
+  const errEl = document.getElementById("trans-error");
+  if (errEl) errEl.textContent = (anyAudio && !FEATURES.whisper) ? t("error.audio.disabled") : "";
   const anyScribbler = Array.from(files).some(f => isScribblerFile(f.name));
   const anyImage = Array.from(files).some(f => isImageFile(f.name));
   const anyZip = Array.from(files).some(f => /\.zip$/i.test(f.name));
-  document.getElementById("audio-options").classList.toggle("hidden", !anyAudio);
+  document.getElementById("audio-options").classList.toggle("hidden", !anyAudio || !FEATURES.whisper);
   document.getElementById("scribbler-options").classList.toggle("hidden", !anyScribbler);
   document.getElementById("image-options")?.classList.toggle("hidden", !anyImage);
   document.getElementById("zip-notice")?.classList.toggle("hidden", !anyZip);
-  if (anyAudio) _updateModelWrapVisibility();
+  if (anyAudio && FEATURES.whisper) _updateModelWrapVisibility();
 
   Array.from(files).forEach(f => {
     const li = document.createElement("li");
@@ -1153,6 +1173,10 @@ document.getElementById("btn-trans-confirm").addEventListener("click", async () 
 
   const files = fileInput.files;
   if (!files || files.length === 0) { errEl.textContent = t("error.no.file"); return; }
+  if (!FEATURES.whisper && Array.from(files).some(f => isAudioFile(f.name))) {
+    errEl.textContent = t("error.audio.disabled");
+    return;
+  }
 
   // Build diarization settings (only relevant for audio)
   const autoIdentify = document.getElementById("diar-auto-identify")?.checked && !!_voiceProfileMeta;
@@ -1180,8 +1204,8 @@ document.getElementById("btn-trans-confirm").addEventListener("click", async () 
     if (isImageFile(file.name)) {
       imageIdx++;
       const uploadLabel = imageFiles.length > 1
-        ? `Bild ${imageIdx}/${imageFiles.length} — Laddar upp…`
-        : "Laddar upp…";
+        ? `${t("progress.prefix.image")} ${imageIdx}/${imageFiles.length} — ${t("progress.uploading")}`
+        : t("progress.uploading");
       updateProgressBar(0, "");
       document.getElementById("trans-progress-stage").textContent = uploadLabel;
       document.getElementById("trans-progress-pct").textContent = "0%";
@@ -1328,7 +1352,7 @@ document.getElementById("btn-hf-save")?.addEventListener("click", async () => {
   const statusEl = document.getElementById("hf-token-status");
   if (!token) return;
 
-  statusEl.textContent = "Verifierar…";
+  statusEl.textContent = t("hf.verifying");
   statusEl.style.color = "var(--text-dim)";
   const res = await POST("/api/config/hf-token", { token });
 
@@ -1455,7 +1479,7 @@ function openSpeakerNamingDialog(speakersFound, voiceMatches) {
   }
 
   // Determine coder name for auto-fill
-  const coderName = document.getElementById("coder-badge")?.textContent?.replace("Kodare: ", "").trim() || "";
+  const coderName = _currentCoder || "";
 
   speakersFound.forEach(spkId => {
     const match = voiceMatches[spkId];
@@ -1546,7 +1570,7 @@ function openBatchSpeakerDialog() {
   document.getElementById("batch-spk-error").textContent = "";
   document.getElementById("batch-spk-progress").classList.add("hidden");
 
-  const coderName = document.getElementById("coder-badge")?.textContent?.replace("Kodare: ", "").trim() || "";
+  const coderName = _currentCoder || "";
 
   _audioBatch.forEach((job, idx) => {
     const fileSection = document.createElement("div");
@@ -1669,11 +1693,13 @@ document.getElementById("btn-batch-spk-skip")?.addEventListener("click", async (
 // ---------------------------------------------------------------------------
 // Load transcript + annotations
 // ---------------------------------------------------------------------------
+let _loadTranscriptToken = 0;
+
+// Returnerar true om transkriptet laddades. Vid fel eller om en senare
+// laddning hunnit starta lämnas nuvarande tillstånd orört — annars kunde ett
+// tomt currentText/annotations sparas över riktiga data.
 async function loadTranscript(tid) {
-  currentTid = tid;
-  formattingSpans = [];
-  segments       = [];
-  segmentCharMap = [];
+  const token = ++_loadTranscriptToken;
   const transcript = project.transcripts.find(tr => tr.id === tid);
 
   // Fetch text + annotations (critical) — formatting is optional
@@ -1681,6 +1707,15 @@ async function loadTranscript(tid) {
     GET(`/api/transcripts/${tid}/text`),
     GET(`/api/transcripts/${tid}/annotations`),
   ]);
+  if (token !== _loadTranscriptToken) return false;
+  if (textRes.ok === false || annRes.ok === false) {
+    appAlert(t("transcript.load.failed", { error: textRes.error || annRes.error || "" }));
+    return false;
+  }
+  currentTid = tid;
+  formattingSpans = [];
+  segments       = [];
+  segmentCharMap = [];
   currentText = textRes.text || "";
   annotations = annRes.annotations || [];
 
@@ -1694,6 +1729,7 @@ async function loadTranscript(tid) {
     audioWrap.classList.remove("hidden");
     // Load segments asynchronously for click-to-seek
     GET(`/api/transcripts/${tid}/segments`).then(res => {
+      if (token !== _loadTranscriptToken) return;
       if (res.segments && res.segments.length) {
         segments       = res.segments;
         segmentCharMap = buildSegmentCharMap(segments);
@@ -1773,14 +1809,16 @@ async function loadTranscript(tid) {
 
   // Fetch formatting spans separately (non-critical — failure is silent)
   GET(`/api/transcripts/${tid}/formatting`).then(fmtRes => {
+    if (token !== _loadTranscriptToken) return;
     formattingSpans = (fmtRes && fmtRes.spans) || [];
     if (formattingSpans.length) applyFormatSpans();
   }).catch(() => {});
+  return true;
 }
 
 function updateAnnBadge() {
   document.getElementById("ann-count-badge").textContent =
-    `${annotations.length} kodning${annotations.length !== 1 ? "ar" : ""}`;
+    t(annotations.length === 1 ? "ann.count.one" : "ann.count.other", { n: annotations.length });
 }
 
 // ---------------------------------------------------------------------------
@@ -1862,7 +1900,7 @@ function _openSourcePanel(tid, transcript) {
       const img = document.createElement("img");
       img.className = "note-photo";
       img.src = `/api/transcripts/${tid}/photo/${n}`;
-      img.alt = `foto ${n + 1}`;
+      img.alt = t("source.photo.alt", { n: n + 1 });
       photosEl.appendChild(img);
     }
     photosEl.classList.toggle("hidden", photos.length === 0);
@@ -2794,7 +2832,7 @@ function renderCodeNode(node, depth) {
   item.innerHTML = `
     <span class="code-dot" style="background:${node.color}"></span>
     <span class="code-name">${esc(node.name)}</span>
-    <button class="code-edit-btn" title="Redigera">✎</button>`;
+    <button class="code-edit-btn" title="${escAttr(t("code.edit.title"))}">✎</button>`;
   item.querySelector(".code-edit-btn").addEventListener("click", e => {
     e.stopPropagation();
     openCodeModal(node);
@@ -2938,6 +2976,9 @@ document.getElementById("btn-export-menu").addEventListener("click", () => {
   document.getElementById("export-folder-input").value = lastFolder;
   document.getElementById("export-status").textContent = "";
   document.getElementById("btn-export-confirm").disabled = false;
+  // Default to the whole project; "open transcript" only when one is open
+  document.querySelector('input[name="export-scope"][value="project"]').checked = true;
+  document.getElementById("export-scope-transcript").disabled = !currentTid;
   document.getElementById("modal-export").classList.remove("hidden");
 });
 
@@ -2980,11 +3021,19 @@ document.getElementById("btn-export-confirm").addEventListener("click", async ()
   const btn = document.getElementById("btn-export-confirm");
   btn.disabled = true;
   document.getElementById("export-status").textContent = "…";
-  const res = await POST("/api/export/to-folder", { folder, formats, tid: currentTid });
+  const scope = document.querySelector('input[name="export-scope"]:checked')?.value || "project";
+  const res = await POST("/api/export/to-folder", {
+    folder, formats,
+    tid: scope === "transcript" ? currentTid : null,  // filter for CSV / MD per code
+    current_tid: currentTid,                          // for "this transcript"
+  });
   btn.disabled = false;
   if (res.ok) {
-    document.getElementById("export-status").textContent =
-      t("export.ok", { count: res.written.length, folder: res.folder });
+    let msg = t("export.ok", { count: res.written.length, folder: res.folder });
+    if (res.errors && res.errors.length) {
+      msg += " " + t("export.partial.failed", { formats: res.errors.join(", ") });
+    }
+    document.getElementById("export-status").textContent = msg;
   } else {
     document.getElementById("export-status").textContent = res.error || t("export.err.no.format");
   }
@@ -2996,24 +3045,49 @@ document.getElementById("btn-export-confirm").addEventListener("click", async ()
 document.getElementById("btn-merge").addEventListener("click", () => {
   document.getElementById("merge-result").textContent = "";
   document.getElementById("merge-error").textContent = "";
-  document.getElementById("merge-path").value = "";
+  document.getElementById("merge-file").value = "";
   document.getElementById("modal-merge").classList.remove("hidden");
 });
 document.getElementById("btn-merge-cancel").addEventListener("click", () => {
   document.getElementById("modal-merge").classList.add("hidden");
 });
 document.getElementById("btn-merge-confirm").addEventListener("click", async () => {
-  const path = document.getElementById("merge-path").value.trim();
-  if (!path) return;
-  const res = await POST("/api/merge", { path });
-  if (res.error) {
-    document.getElementById("merge-error").textContent = res.error;
-  } else {
-    document.getElementById("merge-result").textContent =
-      t("import.merge.success", { imported: res.imported, coder: res.coder, skipped: res.skipped });
-    // Reload if current transcript was affected
-    if (currentTid && res.transcript_id === currentTid) loadTranscript(currentTid);
+  const file = document.getElementById("merge-file").files[0];
+  const resultEl = document.getElementById("merge-result");
+  const errorEl = document.getElementById("merge-error");
+  resultEl.textContent = ""; errorEl.textContent = "";
+  if (!file) return;
+  const fd = new FormData();
+  fd.append("file", file);
+  let res;
+  try {
+    const r = await fetch("/api/codings/import", { method: "POST", body: fd });
+    res = await r.json();
+  } catch (e) {
+    res = { error: String(e) };
   }
+  if (res.error) {
+    errorEl.textContent = res.error;
+    return;
+  }
+  // Summary + everything that could not be matched, so nothing disappears silently
+  const lines = [t("import.merge.success", { imported: res.imported, coder: res.coder, skipped: res.skipped })];
+  if (res.codes_created?.length)
+    lines.push(t("import.merge.codes.created", { codes: res.codes_created.join(", ") }));
+  if (res.transcripts_unmatched?.length)
+    lines.push(t("import.merge.unmatched", { names: res.transcripts_unmatched.join(", ") }));
+  if (res.text_changed?.length)
+    lines.push(t("import.merge.text.changed", { names: res.text_changed.join(", ") }));
+  if (res.unknown_code)
+    lines.push(t("import.merge.unknown.code", { n: res.unknown_code }));
+  resultEl.textContent = lines.join("\n");
+  resultEl.style.whiteSpace = "pre-line";
+  if (res.project) {
+    project = res.project;
+    renderCodebook();
+  }
+  _annChangeCounter++;  // analysis view reloads
+  if (currentTid && (res.transcript_ids || []).includes(currentTid)) loadTranscript(currentTid);
 });
 
 // ---------------------------------------------------------------------------
@@ -3315,7 +3389,7 @@ document.addEventListener("contextmenu", e => {
 
 document.getElementById("ctx-search").addEventListener("click", async () => {
   if (!memoTargetTid) return;
-  if (memoTargetTid !== currentTid) await loadTranscript(memoTargetTid);
+  if (memoTargetTid !== currentTid && !(await loadTranscript(memoTargetTid))) return;
   openSearch();
 });
 
@@ -3397,6 +3471,85 @@ document.getElementById("btn-cat-remove")?.addEventListener("click", async () =>
 
 
 // ---------------------------------------------------------------------------
+// Transcript tagging
+// ---------------------------------------------------------------------------
+let _tagTids = [];
+
+document.getElementById("ctx-tag")?.addEventListener("click", () => {
+  const tids = selectedTids.size > 0 ? [...selectedTids] : (memoTargetTid ? [memoTargetTid] : []);
+  if (tids.length === 0) return;
+  openTagModal(tids);
+});
+
+function openTagModal(tids) {
+  _tagTids = tids;
+  // Datalist: all unique tags in the project
+  const allTags = [...new Set((project.transcripts || []).flatMap(tr => tr.tags || []))].sort();
+  document.getElementById("tag-datalist").innerHTML = allTags.map(c => `<option value="${esc(c)}">`).join("");
+  renderTagModalChips();
+  document.getElementById("modal-tag").classList.remove("hidden");
+  setTimeout(() => document.getElementById("tag-name-input").focus(), 50);
+}
+
+function renderTagModalChips() {
+  const sets = _tagTids.map(id => new Set((project.transcripts.find(tr => tr.id === id)?.tags) || []));
+  const intersection = sets.length ? [...sets[0]].filter(tg => sets.every(s => s.has(tg))) : [];
+  const union = [...new Set(sets.flatMap(s => [...s]))];
+  const partial = union.filter(tg => !intersection.includes(tg));
+  const wrap = document.getElementById("tag-current-chips");
+  const removeTitle = escAttr(t("tag.remove"));
+  const chips = [
+    ...intersection.map(tg => `<span class="tag-chip"><span class="tag-chip-text">${esc(tg)}</span><button class="tag-chip-x" data-tag="${escAttr(tg)}" title="${removeTitle}">✕</button></span>`),
+    ...partial.map(tg => `<span class="tag-chip tag-chip-partial"><span class="tag-chip-text">${esc(tg)}</span><em class="tag-chip-partial-note">${esc(t("tag.partial"))}</em><button class="tag-chip-x" data-tag="${escAttr(tg)}" title="${removeTitle}">✕</button></span>`),
+  ].join("");
+  wrap.innerHTML = chips || `<div class="tag-empty" data-i18n="tag.empty">${esc(t("tag.empty"))}</div>`;
+  wrap.querySelectorAll("button.tag-chip-x").forEach(btn => {
+    btn.addEventListener("click", () => removeTagFromSelection(btn.dataset.tag));
+  });
+}
+
+async function addTagToSelection(tag) {
+  const res = await PATCH("/api/transcripts/tag", { tids: _tagTids, add: [tag] });
+  if (res.ok) {
+    project = res.project;
+    _annChangeCounter++;  // analysvyn läser om data och städar taggfiltret
+    renderTagModalChips();
+    renderTranscriptList();
+    // Refresh datalist so the new tag is autocomplete-able for further input
+    const allTags = [...new Set((project.transcripts || []).flatMap(tr => tr.tags || []))].sort();
+    document.getElementById("tag-datalist").innerHTML = allTags.map(c => `<option value="${esc(c)}">`).join("");
+  }
+}
+
+async function removeTagFromSelection(tag) {
+  const res = await PATCH("/api/transcripts/tag", { tids: _tagTids, remove: [tag] });
+  if (res.ok) {
+    project = res.project;
+    _annChangeCounter++;  // analysvyn läser om data och städar taggfiltret
+    renderTagModalChips();
+    renderTranscriptList();
+  }
+}
+
+document.getElementById("btn-tag-add")?.addEventListener("click", () => {
+  const input = document.getElementById("tag-name-input");
+  const v = input.value.trim();
+  if (v) { addTagToSelection(v); input.value = ""; input.focus(); }
+});
+
+document.getElementById("tag-name-input")?.addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter") {
+    ev.preventDefault();
+    document.getElementById("btn-tag-add").click();
+  }
+});
+
+document.getElementById("btn-tag-done")?.addEventListener("click", () => {
+  document.getElementById("modal-tag").classList.add("hidden");
+});
+
+
+// ---------------------------------------------------------------------------
 // Statistics modal
 // ---------------------------------------------------------------------------
 document.getElementById("btn-stats").addEventListener("click", openStats);
@@ -3424,7 +3577,7 @@ function renderStats(data) {
   }
   const maxCount = Math.max(...data.rows.map(r => r.count));
   let html = `<p style="font-size:12px;color:var(--text-dim);margin:10px 0">
-    ${data.total_annotations} kodningar totalt · ${data.transcript_count} transkript</p>
+    ${esc(t("stats.summary", { n: data.total_annotations, t: data.transcript_count }))}</p>
     <table class="stats-table">
     <thead><tr>
       <th>${t("stats.col.code")}</th>
@@ -3495,7 +3648,7 @@ async function computeIRR() {
     <div class="kappa-box">
       <span class="kappa-value" style="color:${kColor}">κ = ${k.toFixed(3)}</span>
       <span class="kappa-label">${esc(res.interpretation)}</span>
-      <span class="kappa-sub">Po = ${res.po} · Pe = ${res.pe} · n = ${res.n_chars.toLocaleString()} tecken</span>
+      <span class="kappa-sub">Po = ${res.po} · Pe = ${res.pe} · ${esc(t("irr.n.chars", { n: res.n_chars.toLocaleString() }))}</span>
     </div>`;
 
   // Per-code table
@@ -4104,7 +4257,7 @@ document.getElementById("btn-ct-png").addEventListener("click", async () => {
   const content = document.getElementById("codetree-content");
   const canvas  = await html2canvas(content, { backgroundColor: null, scale: 2 });
   const link = document.createElement("a");
-  link.download = "kodtrad.png";
+  link.download = `${t("codetree.png.filename")}.png`;
   link.href = canvas.toDataURL("image/png");
   link.click();
   btn.textContent = orig;
@@ -4161,7 +4314,7 @@ function _makeSnippetEl(match, query, tid) {
     esc(s.slice(me));
   el.addEventListener("click", async () => {
     closeProjectSearch();
-    if (tid !== currentTid) await loadTranscript(tid);
+    if (tid !== currentTid && !(await loadTranscript(tid))) return;
     document.getElementById("search-input").value = query;
     openSearch();
     runSearch();
@@ -4426,7 +4579,7 @@ function setupAnnSearch() {
     // Show "create" option when query matches nothing exactly
     const exactMatch = flat.find(c => c.name.toLowerCase() === q);
     if (q && !exactMatch) {
-      createBtn.textContent = `+ Skapa "${query}"`;
+      createBtn.textContent = t("ann.create.code", { q: query });
       createRow.classList.remove("hidden");
     } else {
       createRow.classList.add("hidden");
@@ -4485,6 +4638,35 @@ document.addEventListener("click", e => {
     document.getElementById("settings-popover").classList.add("hidden");
   }
 });
+
+// --- Feature flags (loaded once) ---
+function applyFeatureFlags() {
+  const fileInput = document.getElementById("trans-file");
+  const fileLabel = document.querySelector('[data-i18n="trans.file.label"]');
+  if (!FEATURES.whisper) {
+    // Drop audio extensions from the file picker and its label; the backend
+    // refuses audio uploads too, so this is presentation only.
+    if (fileInput) {
+      fileInput.accept = fileInput.accept.split(",")
+        .filter(ext => !isAudioFile("x" + ext)).join(",");
+    }
+    if (fileLabel) fileLabel.dataset.i18n = "trans.file.label.noaudio";
+    document.getElementById("btn-voice-profile")?.setAttribute("hidden", "");
+    // Voice identification only matters for new transcriptions (the waveform
+    // setting stays: it applies to existing audio transcripts); the
+    // system-info box (RAM/GPU warnings) concerns transcription only.
+    document.getElementById("setting-auto-identify")?.closest(".settings-row")?.classList.add("hidden");
+    document.getElementById("system-info-box")?.setAttribute("hidden", "");
+  }
+  applyTranslations();
+}
+
+(function loadFeatures() {
+  GET("/api/features").then(f => {
+    FEATURES = { ...FEATURES, ...(f || {}) };
+    applyFeatureFlags();
+  }).catch(() => applyFeatureFlags());
+})();
 
 // --- System info (loaded once, shown in settings popover) ---
 (function loadSystemInfo() {
@@ -4714,7 +4896,7 @@ function renderCodeMatrix(data, wrap) {
   const frow  = tfoot.insertRow();
   const ftd0  = document.createElement("td");
   ftd0.className  = "row-header";
-  ftd0.textContent = "Totalt";
+  ftd0.textContent = t("matrix.total");
   ftd0.style.fontWeight = "600";
   frow.appendChild(ftd0);
   data.codes.forEach(c => {
@@ -5012,16 +5194,226 @@ function toggleView(view) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Analysis: tag-based filter
+// ---------------------------------------------------------------------------
+let _pendingTagFilter = null; // staged state while modal is open
+
+function _projectAllTags() {
+  return [...new Set((project?.transcripts || []).flatMap(tr => tr.tags || []))].sort();
+}
+
+// mode "all" = transkriptet måste ha samtliga valda taggar, annars räcker en.
+function _transcriptMatchesTags(trTags, selectedTags, mode) {
+  if (!selectedTags.size) return true;
+  const have = new Set(trTags || []);
+  if (mode === "all") {
+    for (const tg of selectedTags) if (!have.has(tg)) return false;
+    return true;
+  }
+  for (const tg of selectedTags) if (have.has(tg)) return true;
+  return false;
+}
+
+function _countMatchingTranscripts(selectedTags, mode) {
+  const transcripts = project?.transcripts || [];
+  return transcripts.filter(tr => _transcriptMatchesTags(tr.tags, selectedTags, mode)).length;
+}
+
+// Utdrag som återstår efter taggfiltret (före kod-, ankar- och sökfilter).
+function _tagFilteredExcerpts() {
+  if (!_analysisData) return [];
+  const sel = _analysisState.selectedTags;
+  if (!sel.size) return _analysisData.excerpts;
+  const mode = _analysisState.tagFilterMode;
+  const matching = new Set((project?.transcripts || [])
+    .filter(tr => _transcriptMatchesTags(tr.tags, sel, mode))
+    .map(tr => tr.id));
+  return _analysisData.excerpts.filter(e => matching.has(e.transcript_id));
+}
+
+// Anropas av applyTranslations(): etiketter som byggs i JS och därför inte
+// kan bära data-i18n.
+function refreshDynamicLabels() {
+  if (_currentCoder) {
+    document.getElementById("coder-badge").textContent = t("topbar.coder.badge", { coder: _currentCoder });
+  }
+  if (currentTid) updateAnnBadge();
+  updateTagFilterButtonLabel();
+}
+
+function updateTagFilterButtonLabel() {
+  const label = document.getElementById("analysis-tag-filter-label");
+  if (!label) return;
+  const sel = _analysisState.selectedTags;
+  if (!sel.size) {
+    label.textContent = t("analysis.tag.all");
+  } else {
+    const matched = _countMatchingTranscripts(sel, _analysisState.tagFilterMode);
+    const total = (project?.transcripts || []).length;
+    label.textContent = t("analysis.tag.filter.label", { tags: sel.size, n: matched, total });
+  }
+}
+
+function openTagFilterModal() {
+  // Sync staged state from active state
+  _pendingTagFilter = {
+    selectedTags: new Set(_analysisState.selectedTags),
+    mode: _analysisState.tagFilterMode,
+  };
+  // Mode radios
+  document.querySelectorAll('input[name="tag-filter-mode"]').forEach(r => {
+    r.checked = (r.value === _pendingTagFilter.mode);
+  });
+  // Tag list
+  renderTagFilterList();
+  updateTagFilterMeta();
+  document.getElementById("modal-analysis-tag-filter").classList.remove("hidden");
+}
+
+function renderTagFilterList() {
+  const wrap = document.getElementById("tag-filter-list");
+  const allTags = _projectAllTags();
+  if (!allTags.length) {
+    wrap.innerHTML = `<div class="tag-empty">${esc(t("analysis.tag.filter.notags"))}</div>`;
+    return;
+  }
+  // Clean staged set: remove tags that no longer exist
+  for (const tg of [..._pendingTagFilter.selectedTags]) {
+    if (!allTags.includes(tg)) _pendingTagFilter.selectedTags.delete(tg);
+  }
+  wrap.innerHTML = allTags.map(tg => {
+    const checked = _pendingTagFilter.selectedTags.has(tg) ? "checked" : "";
+    return `<label class="tag-filter-row"><input type="checkbox" data-tag="${escAttr(tg)}" ${checked} /> <span>${esc(tg)}</span></label>`;
+  }).join("");
+  wrap.querySelectorAll("input[type=checkbox]").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const tg = cb.dataset.tag;
+      if (cb.checked) _pendingTagFilter.selectedTags.add(tg);
+      else _pendingTagFilter.selectedTags.delete(tg);
+      updateTagFilterMeta();
+    });
+  });
+}
+
+function updateTagFilterMeta() {
+  const meta = document.getElementById("tag-filter-meta");
+  const sel = _pendingTagFilter.selectedTags;
+  const total = (project?.transcripts || []).length;
+  if (!sel.size) {
+    meta.textContent = t("analysis.tag.filter.meta.none", { total });
+  } else {
+    const matched = _countMatchingTranscripts(sel, _pendingTagFilter.mode);
+    meta.textContent = t("analysis.tag.filter.meta", { tags: sel.size, n: matched, total });
+  }
+}
+
+document.getElementById("btn-analysis-tag-filter")?.addEventListener("click", openTagFilterModal);
+
+document.querySelectorAll('input[name="tag-filter-mode"]').forEach(r => {
+  r.addEventListener("change", () => {
+    if (!_pendingTagFilter) return;
+    _pendingTagFilter.mode = r.value;
+    updateTagFilterMeta();
+  });
+});
+
+document.getElementById("btn-tag-filter-apply")?.addEventListener("click", () => {
+  if (!_pendingTagFilter) return;
+  _analysisState.selectedTags = new Set(_pendingTagFilter.selectedTags);
+  _analysisState.tagFilterMode = _pendingTagFilter.mode;
+  document.getElementById("modal-analysis-tag-filter").classList.add("hidden");
+  updateTagFilterButtonLabel();
+  renderAnalysisCodebook();
+  renderAnalysisContent();
+});
+
+document.getElementById("btn-tag-filter-clear")?.addEventListener("click", () => {
+  _analysisState.selectedTags.clear();
+  document.getElementById("modal-analysis-tag-filter").classList.add("hidden");
+  updateTagFilterButtonLabel();
+  renderAnalysisCodebook();
+  renderAnalysisContent();
+});
+
+document.getElementById("btn-tag-filter-cancel")?.addEventListener("click", () => {
+  document.getElementById("modal-analysis-tag-filter").classList.add("hidden");
+});
+
+
+async function jumpToExcerpt(e) {
+  // Backtracka citat: byt till kodningsvyn och scrolla till annoteringen
+  toggleView("coding");
+  if (currentTid !== e.transcript_id) {
+    selectedTids.clear();
+    const ok = await loadTranscript(e.transcript_id);
+    renderTranscriptList();
+    if (!ok) return;
+  }
+  // Vänta en frame så att DOM:en hinner renderas
+  requestAnimationFrame(() => {
+    if (highlightAnnotation(e.id)) return;
+    // Annan kodares annotering visas inte i kodningsvyn — markera textomfånget
+    // tillfälligt och berätta varför.
+    if (e.kind === "text" && e.end > e.start) highlightTextRange(e.start, e.end);
+    if (e.coder && e.coder !== _currentCoder) {
+      appAlert(t("analysis.jump.other.coder", { coder: e.coder }));
+    }
+  });
+}
+
+// Returnerar true om annoteringen hittades i DOM:en.
+function highlightAnnotation(annId) {
+  // En annotering kan täcka flera spann, och vid överlapp står den bara i
+  // data-ann-ids (data-ann-id bär endast den primära).
+  let els = [...document.querySelectorAll(".annotation-span[data-ann-ids]")]
+    .filter(el => el.dataset.annIds.split(",").includes(annId));
+  if (!els.length) {
+    // Fall tillbaka på pin (för bild-annoteringar)
+    els = [...document.querySelectorAll(".point-pin")].filter(el => el.dataset.annId === annId);
+  }
+  if (!els.length) return false;
+  els[0].scrollIntoView({ behavior: "smooth", block: "center" });
+  for (const el of els) el.classList.add("jump-highlight");
+  setTimeout(() => els.forEach(el => el.classList.remove("jump-highlight")), 1500);
+  return true;
+}
+
+// Tillfällig markering av ett teckenomfång utan att röra DOM:en (CSS Custom
+// Highlight API); faller tillbaka på enbart scroll där API:t saknas.
+function highlightTextRange(start, end) {
+  const container = document.getElementById("transcript-text");
+  if (!container) return;
+  const nodeMap = buildNodeCharMap(container);
+  const first = nodeMap.find(nm => nm.end > start);
+  const last = [...nodeMap].reverse().find(nm => nm.start < end);
+  if (!first || !last) return;
+  const range = document.createRange();
+  range.setStart(first.node, Math.max(0, start - first.start));
+  range.setEnd(last.node, Math.min(last.node.textContent.length, end - last.start));
+  first.node.parentElement?.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (window.CSS && CSS.highlights && window.Highlight) {
+    CSS.highlights.set("jump-range", new Highlight(range));
+    setTimeout(() => CSS.highlights.delete("jump-range"), 2500);
+  }
+}
+
 async function loadAnalysisData() {
   const content = document.getElementById("analysis-content");
-  content.innerHTML = '<div class="analysis-empty">Laddar…</div>';
+  content.innerHTML = `<div class="analysis-empty">${esc(t("common.loading"))}</div>`;
   try {
     _analysisData = await GET("/api/analysis/excerpts");
     _analysisLastCounter = _annChangeCounter;
+    // Städa bort taggar som inte längre finns i projektet
+    const allTags = new Set(_projectAllTags());
+    for (const tg of [..._analysisState.selectedTags]) {
+      if (!allTags.has(tg)) _analysisState.selectedTags.delete(tg);
+    }
+    updateTagFilterButtonLabel();
     renderAnalysisCodebook();
     renderAnalysisContent();
   } catch (e) {
-    content.innerHTML = '<div class="analysis-empty">Kunde inte ladda data.</div>';
+    content.innerHTML = `<div class="analysis-empty">${esc(t("analysis.load.error"))}</div>`;
   }
 }
 
@@ -5033,7 +5425,9 @@ function renderAnalysisCodebook() {
   const codes = project.codes || [];
   const tree = buildTree(codes);
   if (numberingEnabled) assignNumbers(tree, "");
-  const counts = _analysisData.code_counts || {};
+  // Räkna klientsidan så att antalen följer taggfiltret
+  const counts = {};
+  for (const e of _tagFilteredExcerpts()) counts[e.code_id] = (counts[e.code_id] || 0) + 1;
 
   function renderNode(node, depth) {
     const item = document.createElement("div");
@@ -5109,7 +5503,7 @@ function onAnalysisCodeToggle(codeId, checked, node) {
 
 function filterAnalysisExcerpts() {
   if (!_analysisData) return [];
-  let excerpts = _analysisData.excerpts;
+  let excerpts = _tagFilteredExcerpts();
   const sel = _analysisState.selectedCodes;
   if (sel.size > 0) {
     excerpts = excerpts.filter(e => sel.has(e.code_id));
@@ -5186,6 +5580,17 @@ function _createExcerptCard(e, showMemos, exportMode, searchQ) {
   card.className = "analysis-excerpt-card";
   card.dataset.excerptId = e.id;
   if (e.anchor) card.classList.add("anchor-card");
+  // Clickable card → jump to annotation in coding view (Funktion: backtracka citat)
+  if (!exportMode) {
+    card.classList.add("clickable");
+    card.title = t("analysis.jump.tooltip");
+    card.addEventListener("click", (ev) => {
+      if (ev.target.closest("input, button, a, mark")) return;
+      // Låt användaren markera och kopiera citat utan att navigera bort
+      if (window.getSelection().toString()) return;
+      jumpToExcerpt(e);
+    });
+  }
 
   const header = document.createElement("div");
   header.className = "analysis-excerpt-header";
@@ -5528,9 +5933,10 @@ document.querySelectorAll(".analysis-fmt-btn").forEach(btn => {
 });
 
 function _analysisExportFilenameBase() {
-  const name = (project && project.name) ? project.name : "analys";
-  const safe = name.replace(/[\\/:*?"<>|]/g, "_").trim() || "analys";
-  return `${safe}_analys`;
+  const base = t("analysis.export.filename");
+  const name = (project && project.name) ? project.name : base;
+  const safe = name.replace(/[\\/:*?"<>|]/g, "_").trim() || base;
+  return `${safe}_${base}`;
 }
 
 function _closeAnalysisExportModal() {
@@ -5571,7 +5977,7 @@ async function doAnalysisExport(format) {
   }
 
   if (format === "png") {
-    statusEl.textContent = "Genererar PNG…";
+    statusEl.textContent = t("analysis.png.generating");
     try {
       if (!window.html2canvas) {
         await new Promise((resolve, reject) => {
@@ -5616,6 +6022,9 @@ async function doAnalysisExport(format) {
     format,
     mode: _analysisState.displayMode,
     anchor_only: false,
+    // Taggfiltret avgränsar urvalet för alla exporttyper, liksom i vyn och PNG
+    tags: [..._analysisState.selectedTags],
+    tag_mode: _analysisState.tagFilterMode,
   };
 
   if (exportType === "all") {
@@ -5646,7 +6055,7 @@ async function doAnalysisExport(format) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     const cd = res.headers.get("content-disposition") || "";
-    const fnMatch = cd.match(/filename=(.+)/);
+    const fnMatch = cd.match(/filename="?([^";]+)"?/);
     link.download = fnMatch ? fnMatch[1] : `${fnameBase}.${format}`;
     link.href = url;
     link.click();

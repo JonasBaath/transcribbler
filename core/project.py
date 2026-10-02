@@ -245,7 +245,7 @@ def add_transcript(folder: str, project: dict, src_path: str, name: str = "",
         "name": display_name,
         "original": dest_name,
         "text_file": f"{tid}.txt",
-        "tags": [],
+        "tags": list(fm.get("tags") or []),
         "added": _now(),
     }
     if fm.get("category"):
@@ -423,31 +423,96 @@ def remove_transcript(folder: str, project: dict, tid: str,
     return project
 
 
+def _split_flow_list(inner: str) -> list:
+    """Split the inside of a YAML flow list on commas outside quotes."""
+    items, buf, quote = [], "", None
+    for ch in inner:
+        if quote:
+            if ch == quote:
+                quote = None
+            buf += ch
+        elif ch in ("'", '"'):
+            quote = ch
+            buf += ch
+        elif ch == ",":
+            items.append(buf)
+            buf = ""
+        else:
+            buf += ch
+    items.append(buf)
+    return items
+
+
+def _clean_tags(items: list) -> list:
+    """Strip whitespace/quotes, drop empty entries and duplicates (order kept)."""
+    out = []
+    for item in items:
+        tag = item.strip()
+        if len(tag) >= 2 and tag[0] in ("'", '"') and tag[-1] == tag[0]:
+            tag = tag[1:-1].strip()
+        if tag and tag not in out:
+            out.append(tag)
+    return out
+
+
 def _parse_md_frontmatter(path: Path) -> dict:
     """
-    Extract top-level scalar fields from YAML frontmatter in a .md file.
-    Returns a dict with string values for keys found (e.g. title, category).
-    List fields (tags, photos) and nested objects (location) are ignored.
+    Extract top-level fields from YAML frontmatter in a .md file.
+    Scalars become strings; the 'tags' field becomes a list (supports both
+    flow-style `tags: [a, b]` and block-style with `- a` per line).
+    Other list fields and nested objects are ignored.
     Returns {} if no frontmatter present.
     """
     import re
-    raw = path.read_text(encoding="utf-8", errors="replace")
+    raw = path.read_text(encoding="utf-8", errors="replace").replace("\r\n", "\n")
     m = re.match(r"\A---\n(.*?)\n---\n?", raw, re.DOTALL)
     if not m:
         return {}
     result = {}
-    for line in m.group(1).splitlines():
-        kv = re.match(r"^([a-zA-Z_]\w*):\s*(.+)", line)
+    lines = m.group(1).splitlines()
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        kv = re.match(r"^([a-zA-Z_]\w*):\s*(.*)$", line)
         if not kv:
+            i += 1
             continue
         key, value = kv.group(1), kv.group(2).strip()
-        # Skip list values and nested objects
-        if value.startswith("[") or value.startswith("{"):
+        # tags — accept both flow and block style
+        if key == "tags":
+            if value.startswith("[") and value.endswith("]"):
+                result["tags"] = _clean_tags(_split_flow_list(value[1:-1]))
+                i += 1
+                continue
+            if value == "":
+                # block style: collect following "- item" lines; PyYAML and
+                # others write them unindented, so indentation is optional
+                items = []
+                j = i + 1
+                while j < len(lines):
+                    item_match = re.match(r"^\s*-\s+(.*)$", lines[j])
+                    if not item_match:
+                        break
+                    items.append(item_match.group(1))
+                    j += 1
+                if items:
+                    result["tags"] = _clean_tags(items)
+                    i = j
+                    continue
+            elif not value.startswith(("[", "{")):
+                # single scalar: tags: intervju
+                result["tags"] = _clean_tags([value])
+            i += 1
+            continue
+        # Skip other list values and nested objects (flow-style or block-style)
+        if value.startswith("[") or value.startswith("{") or value == "":
+            i += 1
             continue
         # Strip surrounding quotes
         if len(value) >= 2 and value[0] in ('"', "'") and value[-1] == value[0]:
             value = value[1:-1]
         result[key] = value
+        i += 1
     return result
 
 
@@ -465,7 +530,7 @@ def _extract_text_with_formatting(path: Path) -> tuple:
         return _extract_odt_with_formatting(path)
     elif ext == ".md":
         import re
-        raw = path.read_text(encoding="utf-8", errors="replace")
+        raw = path.read_text(encoding="utf-8", errors="replace").replace("\r\n", "\n")
         raw = re.sub(r"\A---\n.*?\n---\n?", "", raw, count=1, flags=re.DOTALL)
         raw = re.sub(r"^#{1,6}\s+", "", raw, flags=re.MULTILINE)
         raw = re.sub(r"\*{1,2}(.+?)\*{1,2}", r"\1", raw)
@@ -478,28 +543,70 @@ def _extract_text_with_formatting(path: Path) -> tuple:
         return _read_text_autodetect(path), []
 
 
-def _extract_docx_with_formatting(path: Path) -> tuple:
-    """Extract text and bold/italic spans from a .docx file."""
-    doc = docx.Document(str(path))
+def _docx_paragraph_runs(para) -> list:
+    """(text, bold, italic) for every run, including runs inside hyperlinks
+    (para.runs skips those, which made offsets drift from para.text)."""
+    out = []
+    for item in para.iter_inner_content():
+        runs = item.runs if hasattr(item, "runs") else [item]
+        for run in runs:
+            if run.text:
+                out.append((run.text, bool(run.bold), bool(run.italic)))
+    return out
+
+
+def _docx_lines(container) -> list:
+    """
+    One line per paragraph, in document order, as lists of (text, bold, italic).
+    Table rows become one line each with cells separated by a tab, so
+    speaker/utterance tables keep speaker and text together; paragraphs inside
+    a cell are joined with a space. Merged cells are only emitted once.
+    """
     lines = []
+    for block in container.iter_inner_content():
+        if hasattr(block, "rows"):  # Table
+            for row in block.rows:
+                line, seen = [], set()
+                for cell in row.cells:
+                    if id(cell._tc) in seen:
+                        continue
+                    seen.add(id(cell._tc))
+                    cell_runs = []
+                    for sub in _docx_lines(cell):
+                        if sub:
+                            if cell_runs:
+                                cell_runs.append((" ", False, False))
+                            cell_runs.extend(sub)
+                    if not cell_runs:
+                        continue
+                    if line:
+                        line.append(("\t", False, False))
+                    line.extend(cell_runs)
+                lines.append(line)
+        else:
+            lines.append(_docx_paragraph_runs(block))
+    return lines
+
+
+def _extract_docx_with_formatting(path: Path) -> tuple:
+    """Extract text and bold/italic spans from a .docx file (incl. tables)."""
+    doc = docx.Document(str(path))
+    parts = []
     spans = []
     offset = 0
-    for para in doc.paragraphs:
-        for run in para.runs:
-            text = run.text
-            if not text:
-                continue
-            start = offset
-            end = offset + len(text)
-            if run.bold:
+    for i, line in enumerate(_docx_lines(doc)):
+        if i:
+            parts.append("\n")
+            offset += 1
+        for text, bold, italic in line:
+            start, end = offset, offset + len(text)
+            if bold:
                 spans.append({"start": start, "end": end, "type": "bold"})
-            if run.italic:
+            if italic:
                 spans.append({"start": start, "end": end, "type": "italic"})
+            parts.append(text)
             offset = end
-        lines.append(offset)
-        offset += 1  # newline
-    plain = "\n".join(p.text for p in doc.paragraphs)
-    return plain, spans
+    return "".join(parts), spans
 
 
 def _extract_odt_with_formatting(path: Path) -> tuple:

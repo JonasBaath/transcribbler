@@ -111,3 +111,21 @@ def gather_excerpts(folder: str, project: dict, *, key: bytes | None = None):
     ))
 
     return {"excerpts": excerpts, "code_counts": code_counts}
+
+
+def filter_excerpts_by_tags(excerpts, project, tags, mode="any"):
+    """
+    Keep excerpts from transcripts matching the tag filter.
+    mode "all": the transcript must carry every tag; otherwise one suffices.
+    An empty tag list means no filtering. Mirrors _transcriptMatchesTags in app.js.
+    """
+    wanted = set(tags or [])
+    if not wanted:
+        return excerpts
+    matching = set()
+    for t in project.get("transcripts", []):
+        have = set(t.get("tags") or [])
+        ok = wanted <= have if mode == "all" else bool(wanted & have)
+        if ok:
+            matching.add(t["id"])
+    return [e for e in excerpts if e["transcript_id"] in matching]

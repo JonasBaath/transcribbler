@@ -1430,6 +1430,103 @@ button:disabled {
   border-left-color: #f9c74f;
   background: rgba(249, 199, 79, 0.06);
 }
+.analysis-excerpt-card.clickable { cursor: pointer; transition: box-shadow 0.12s ease; }
+.analysis-excerpt-card.clickable:hover { box-shadow: 0 0 0 2px var(--accent); }
+
+/* Transcript tag chips (sidolisten) */
+.trans-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-left: 6px;
+}
+.trans-tag-chip {
+  display: inline-block;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--bg2);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  line-height: 1.4;
+}
+
+/* Tag modal — chips with remove button */
+.tag-current {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 12px;
+  min-height: 26px;
+}
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 3px 4px 3px 10px;
+  border-radius: 12px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+}
+.tag-chip.tag-chip-partial { opacity: 0.7; }
+.tag-chip-partial-note { font-size: 10px; color: var(--text-dim); margin: 0 2px; }
+.tag-chip-x {
+  background: transparent;
+  border: 0;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 0 4px;
+  border-radius: 50%;
+}
+.tag-chip-x:hover { color: #e57373; background: rgba(229, 115, 115, 0.1); }
+.tag-empty { font-size: 12px; color: var(--text-dim); font-style: italic; }
+
+/* Tag filter modal */
+.tag-filter-meta {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.tag-filter-mode {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.tag-filter-list {
+  max-height: 240px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 6px 8px;
+  margin-bottom: 8px;
+}
+.tag-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 13px;
+  cursor: pointer;
+}
+.tag-filter-row:hover { background: var(--bg2); }
+#btn-analysis-tag-filter { display: inline-flex; align-items: center; gap: 4px; }
+
+@keyframes jump-pulse {
+  0%   { outline: 2px solid transparent; outline-offset: 0; }
+  15%  { outline: 3px solid var(--accent); outline-offset: 2px; }
+  100% { outline: 2px solid transparent; outline-offset: 0; }
+}
+.annotation-span.jump-highlight,
+.point-pin.jump-highlight {
+  animation: jump-pulse 1.5s ease-out;
+}
+/* Tillfällig markering av annan kodares utdrag (CSS Custom Highlight API) */
+::highlight(jump-range) {
+  background-color: var(--accent);
+  color: #fff;
+}
 .analysis-excerpt-header {
   display: flex;
   align-items: center;
