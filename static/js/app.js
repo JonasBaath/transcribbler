@@ -1157,10 +1157,6 @@ function pollJob(jobId, onDone, onError) {
   }).catch(err => onError(String(err)));
 }
 
-function pollJobAsync(jobId) {
-  return new Promise((resolve, reject) => pollJob(jobId, resolve, reject));
-}
-
 document.getElementById("btn-trans-confirm").addEventListener("click", async () => {
   _transcriptAborted = false;
   const fileInput  = document.getElementById("trans-file");
@@ -1465,55 +1461,6 @@ document.getElementById("setting-auto-identify")?.addEventListener("change", asy
 
 // ---------------------------------------------------------------------------
 // Speaker naming dialog
-// ---------------------------------------------------------------------------
-function openSpeakerNamingDialog(speakersFound, voiceMatches) {
-  const rows = document.getElementById("speaker-name-rows");
-  rows.innerHTML = "";
-  document.getElementById("spk-error").textContent = "";
-  voiceMatches = voiceMatches || {};
-
-  if (!speakersFound || speakersFound.length === 0) {
-    // No diarization — commit immediately with empty map
-    commitTranscript({});
-    return;
-  }
-
-  // Determine coder name for auto-fill
-  const coderName = _currentCoder || "";
-
-  speakersFound.forEach(spkId => {
-    const match = voiceMatches[spkId];
-    const isAuto    = match && match.action === "auto";
-    const isSuggest = match && match.action === "suggest";
-    const pct       = match ? Math.round(match.similarity * 100) : 0;
-
-    const row = document.createElement("div");
-    row.className = "speaker-name-row";
-
-    let badgeHtml = "";
-    let prefill   = "";
-    if (isAuto) {
-      prefill   = coderName;
-      badgeHtml = `<span class="spk-match-badge" title="${pct}% ${t("voice.match.auto")}">${pct}%</span>`;
-    } else if (isSuggest) {
-      badgeHtml = `<span class="spk-match-badge suggest" title="${pct}% ${t("voice.match.suggest")}">${pct}%</span>`;
-    }
-
-    row.innerHTML = `
-      <span class="spk-id">${esc(spkId)}</span>
-      ${badgeHtml}
-      <span class="spk-arrow">→</span>
-      <input type="text" class="spk-name-input" data-spk="${escAttr(spkId)}"
-        placeholder="${esc(spkId)}" value="${escAttr(prefill)}" />`;
-    rows.appendChild(row);
-  });
-
-  document.getElementById("modal-speaker-names").classList.remove("hidden");
-  // Focus first empty input
-  const first = rows.querySelector("input:not([value])") || rows.querySelector("input");
-  if (first) first.focus();
-}
-
 document.getElementById("btn-spk-cancel")?.addEventListener("click", () => {
   document.getElementById("modal-speaker-names").classList.add("hidden");
   _pendingJobResult = null;
@@ -2955,18 +2902,6 @@ document.getElementById("btn-code-delete").addEventListener("click", async () =>
     _refreshCodebookManagerIfOpen();
   }
 });
-
-// ---------------------------------------------------------------------------
-// Export
-// ---------------------------------------------------------------------------
-function downloadFromEndpoint(url, filename) {
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-}
 
 // ---------------------------------------------------------------------------
 // Export modal

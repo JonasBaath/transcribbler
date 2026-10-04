@@ -442,9 +442,7 @@ def _transcription_job(job_id: str, audio_path: str, folder: str,
     Worker thread: diarize (optional) + transcribe, then store result in JOBS.
     audio_path is a temp file owned by this job; cleaned up on commit or error.
     """
-    import tempfile
     from core.transcribe import (transcribe_with_diarization, transcribe_with_gaps,
-                                  transcribe, is_audio, get_model_label,
                                   extract_speaker_embeddings, match_voice_profile,
                                   load_voice_profile, get_diarization_device)
 
