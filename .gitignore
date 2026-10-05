@@ -22,10 +22,12 @@ Thumbs.db
 .idea/
 
 # Project data (user content)
+project.json
 TestProject/
 annotations/
 notes/
 transcripts/
+win-transcribbler-betatest-handoff/
 
 # Claude Code dev files
 .claude/
