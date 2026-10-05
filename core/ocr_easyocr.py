@@ -1,10 +1,10 @@
 """
-ocr_easyocr.py — EasyOCR-backend för Win/Linux (och macOS utan Vision).
+ocr_easyocr.py — EasyOCR backend for Windows/Linux (and macOS without Vision).
 
-Stöder svenska (åäö) och engelska out-of-the-box. Modeller (~80 MB)
-laddas ned automatiskt vid första körning och cachas i ~/.EasyOCR/.
+Supports Swedish (å, ä, ö) and English. Models (~80 MB) are downloaded on
+first use and cached in ~/.EasyOCR/.
 
-Kräver: easyocr>=1.7  (pip install easyocr)
+Requires: easyocr>=1.7
 """
 from __future__ import annotations
 
@@ -23,8 +23,7 @@ def _load_reader(progress_cb=None):
         )
     if progress_cb:
         progress_cb("loading_model", 0.05)
-    # GPU=False ger förutsägbar prestanda på alla plattformar; EasyOCR
-    # försöker annars cuda och faller tillbaka till CPU med varning.
+    # Ask for CUDA only when it exists; otherwise EasyOCR warns before falling back to CPU
     import torch
     use_gpu = bool(getattr(torch, "cuda", None) and torch.cuda.is_available())
     _READER = easyocr.Reader(["sv", "en"], gpu=use_gpu, verbose=False)
@@ -34,7 +33,7 @@ def _load_reader(progress_cb=None):
 
 
 def ocr_image_easyocr(image_path: str, progress_cb=None) -> dict:
-    """Returnerar {"text": str, "boxes": [{text, x, y, w, h}]} (0-1 norm)."""
+    """Return {"text": str, "boxes": [{text, x, y, w, h}]} with coordinates normalised to 0–1."""
     def _cb(stage, frac):
         if progress_cb:
             progress_cb(stage, frac)
@@ -42,7 +41,7 @@ def ocr_image_easyocr(image_path: str, progress_cb=None) -> dict:
     reader = _load_reader(progress_cb=progress_cb)
     _cb("ocr", 0.40)
 
-    # readtext returnerar lista av (bbox, text, conf). bbox = 4 hörnpunkter i px.
+    # readtext returns (bbox, text, conf); bbox is four corner points in pixels
     from PIL import Image
     with Image.open(image_path) as im:
         iw, ih = im.size
@@ -51,7 +50,7 @@ def ocr_image_easyocr(image_path: str, progress_cb=None) -> dict:
 
     lines = []
     boxes = []
-    # Sortera i läsordning (y sedan x)
+    # Reading order: top to bottom, then left to right
     def _key(r):
         pts = r[0]
         ys = [p[1] for p in pts]; xs = [p[0] for p in pts]

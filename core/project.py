@@ -272,7 +272,6 @@ def add_audio_transcript(folder: str, project: dict, tid: str, name: str,
     audio_dest = folder_path / TRANSCRIPTS_DIR / audio_dest_name
     shutil.copy2(audio_src, audio_dest)
 
-    # Write extracted plain text
     txt_path = folder_path / TRANSCRIPTS_DIR / f"{tid}.txt"
     write_project_text(txt_path, text, key)
 
@@ -318,7 +317,6 @@ def add_image_transcript(folder: str, project: dict, tid: str, name: str,
     source_dest = folder_path / TRANSCRIPTS_DIR / source_dest_name
     shutil.copy2(image_src, source_dest)
 
-    # Write extracted plain text
     txt_path = folder_path / TRANSCRIPTS_DIR / f"{tid}.txt"
     write_project_text(txt_path, text, key)
 

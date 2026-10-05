@@ -40,7 +40,6 @@ def compute_cooccurrence(folder: str, project: dict, *, key: bytes | None = None
                 for b in anns[i + 1:]:
                     if a["code_id"] == b["code_id"]:
                         continue
-                    # Overlap: max(starts) < min(ends)
                     if max(a["start"], b["start"]) < min(a["end"], b["end"]):
                         ca, cb = a["code_id"], b["code_id"]
                         matrix.setdefault(ca, {})

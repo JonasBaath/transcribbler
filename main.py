@@ -84,7 +84,6 @@ def _cleanup_expired_jobs():
     ]
     for jid in expired:
         job = JOBS.pop(jid, {})
-        # Clean up any leftover temp audio file
         audio_path = (job.get("result") or {}).get("audio_path")
         if audio_path:
             try:
@@ -94,8 +93,7 @@ def _cleanup_expired_jobs():
         logger.info("Expired job %s cleaned up", jid)
 
 
-# Lock som serialiserar alla skrivoperationer mot project.json
-# Skyddar mot race condition när flera OCR/audio-jobb körs parallellt.
+# Serialises writes to project.json: several OCR/audio jobs can run at once.
 _PROJECT_LOCK = threading.Lock()
 
 RECENT_FILE = Path.home() / ".transcribbler_recent.json"
@@ -126,12 +124,10 @@ def _save_config(cfg: dict):
 # ---------------------------------------------------------------------------
 # Feature flags
 # ---------------------------------------------------------------------------
-# Whisper-transkribering (ljud → text) är avstängd som standard: programmet
-# används i undervisning där studenterna ska koda färdiga transkript, inte
-# transkribera. Redan transkriberade ljudtranskript (ljudspelare, segment,
-# vågform) fungerar oavsett flaggan. Slå på med "enable_whisper": true i
-# ~/.transcribbler_config.json eller miljövariabeln
-# TRANSCRIBBLER_ENABLE_WHISPER=1 (t.ex. när läraren förtranskriberar).
+# Whisper transcription is off by default: in teaching, students code
+# ready-made transcripts. Existing audio transcripts (player, segments,
+# waveform) work regardless. Enable with "enable_whisper": true in
+# ~/.transcribbler_config.json or TRANSCRIBBLER_ENABLE_WHISPER=1.
 
 def whisper_enabled() -> bool:
     if os.environ.get("TRANSCRIBBLER_ENABLE_WHISPER", "") in ("1", "true", "yes"):
@@ -536,8 +532,8 @@ def _transcription_job(job_id: str, audio_path: str, folder: str,
 def _ocr_job(job_id: str, image_path: str, folder: str, project: dict, name: str,
              enc_key: bytes | None = None):
     """
-    Worker thread: OCR på en bildfil → spara transkript automatiskt.
-    image_path är en tempfil som ägs av detta jobb och städas upp vid klart/fel.
+    Worker thread: OCR an image file and save the result as a transcript.
+    image_path is a temp file owned by this job; removed when it finishes or fails.
     """
     from core.ocr import ocr_image
 
@@ -554,12 +550,11 @@ def _ocr_job(job_id: str, image_path: str, folder: str, project: dict, name: str
         _progress("saving", 0.92)
         tid = str(uuid.uuid4())[:8]
 
-        # Spara OCR-rutor innan locken (ingen conflict-risk här)
+        # New tid, so the boxes file can be written outside the lock
         boxes_path = Path(folder) / "transcripts" / f"{tid}_ocr_boxes.json"
         write_project_json(boxes_path, boxes, enc_key)
 
-        # Läs om project från disk under lock för att undvika race condition
-        # när flera bilder importeras parallellt.
+        # Re-read project.json under the lock: several images may be importing at once
         with _PROJECT_LOCK:
             current = proj_mod.reload_project(folder, key=enc_key)
             updated = proj_mod.add_image_transcript(
@@ -609,7 +604,6 @@ def upload_transcript():
     ext = Path(f.filename).suffix.lower()
     original_stem = Path(f.filename).stem
 
-    # Save to temp file
     tmp = tempfile.NamedTemporaryFile(suffix=ext, delete=False)
     f.save(tmp.name)
     tmp.close()
@@ -1388,7 +1382,6 @@ def _ocr_photos_job(job_id: str, tid: str, folder: str, photo_paths: list,
             JOBS[job_id]["result"] = {"appended": 0}
             return
 
-        # Append to transcript .txt
         txt_path = Path(folder) / "transcripts" / f"{tid}.txt"
         existing = read_project_text(txt_path, enc_key) if txt_path.exists() else ""
         separator = "\n\n---\n\n"
@@ -1754,7 +1747,7 @@ def delete_annotation(tid, ann_id):
 
 
 # ---------------------------------------------------------------------------
-# Merge / collaboration routes
+# Codings exchange routes
 # ---------------------------------------------------------------------------
 
 def _import_codings(data: dict):
@@ -1886,7 +1879,7 @@ def export_codebook_csv():
     return _download(exp_mod.export_codebook_csv(STATE["project"], _code_counts()), "kodbok", "csv")
 
 # ---------------------------------------------------------------------------
-# Code matrix routes (transkript × kod)
+# Code matrix routes (transcript × code)
 # ---------------------------------------------------------------------------
 
 @app.route("/api/code-matrix", methods=["GET"])
@@ -1916,7 +1909,7 @@ def export_code_matrix_csv():
 
 
 # ---------------------------------------------------------------------------
-# Co-occurrence routes (kod × kod)
+# Co-occurrence routes (code × code)
 # ---------------------------------------------------------------------------
 
 @app.route("/api/cooccurrence", methods=["GET"])
@@ -1944,11 +1937,7 @@ def export_cooccurrence_csv():
 
 
 # ---------------------------------------------------------------------------
-# QDPX export route (REFI-QDA standard)
-# ---------------------------------------------------------------------------
-
-# ---------------------------------------------------------------------------
-# Anchor quote route — get the anchor annotation for a code
+# Anchor quotes (key passages)
 # ---------------------------------------------------------------------------
 
 @app.route("/api/codes/anchors", methods=["GET"])

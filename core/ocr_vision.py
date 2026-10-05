@@ -1,8 +1,8 @@
 """
 ocr_vision.py — Apple Vision OCR backend (macOS only).
 
-Kräver: pyobjc-framework-Vision  (pip install pyobjc-framework-Vision)
-Stöder: tryckt text och handskrift, sv-SE + en-US.
+Requires: pyobjc-framework-Vision
+Supports printed text and handwriting in Swedish and English.
 """
 from __future__ import annotations
 from pathlib import Path
@@ -10,9 +10,9 @@ from pathlib import Path
 
 def ocr_image_vision(image_path: str, progress_cb=None) -> dict:
     """
-    Extrahera text ur en bild med Apple Vision VNRecognizeTextRequest.
-    Returnerar {"text": str, "boxes": [{"text", "x", "y", "w", "h"}]}.
-    Koordinater i boxes är normaliserade (0-1), top-left origin (CSS-kompatibelt).
+    Extract text from an image with Apple Vision (VNRecognizeTextRequest).
+    Returns {"text": str, "boxes": [{"text", "x", "y", "w", "h"}]}, with box
+    coordinates normalised to 0–1 and a top-left origin, as in CSS.
     """
     def _cb(stage: str, frac: float):
         if progress_cb:
@@ -34,13 +34,12 @@ def ocr_image_vision(image_path: str, progress_cb=None) -> dict:
     url = NSURL.fileURLWithPath_(str(Path(image_path).resolve()))
 
     request = Vision.VNRecognizeTextRequest.alloc().init()
-    # Accurate-läge: bättre kvalitet, nödvändigt för handskrift
+    # Accurate mode is required for handwriting
     request.setRecognitionLevel_(Vision.VNRequestTextRecognitionLevelAccurate)
-    # Stäng av språkkorrigering: förhindrar att Vision "rättar" till moderna ord,
-    # vilket ger bättre råresultat för historiska dokument och latin.
+    # No language correction: Vision would otherwise "correct" historical spellings and Latin
     request.setUsesLanguageCorrection_(False)
     request.setRecognitionLanguages_(["sv-SE", "en-US"])
-    # Lägre tröskel för texthöjd — fångar upp fler textelement (default ~0.03)
+    # Default is about 0.03; a lower threshold catches smaller text
     request.setMinimumTextHeight_(0.01)
 
     handler = Vision.VNImageRequestHandler.alloc().initWithURL_options_(url, {})
@@ -79,7 +78,7 @@ def ocr_image_vision(image_path: str, progress_cb=None) -> dict:
                     "h": v_h,
                 })
             except Exception:
-                pass  # box-koordinater misslyckades — text tas ändå med
+                pass  # keep the text even if its box cannot be read
 
     _cb("done", 1.0)
     return {"text": "\n".join(lines), "boxes": boxes}
