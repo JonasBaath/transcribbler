@@ -22,7 +22,6 @@ function _appDialog({ message, title, mode, defaultValue = "" }) {
     msgEl.textContent = message;
     titleEl.textContent = title || (mode === "alert" ? t("modal.alert.title") : t("modal.confirm.title"));
 
-    // Inject/remove an input for prompt mode
     let input = modal.querySelector("#confirm-modal-input");
     if (mode === "prompt") {
       if (!input) {
@@ -37,7 +36,6 @@ function _appDialog({ message, title, mode, defaultValue = "" }) {
       input.remove(); input = null;
     }
 
-    // Hide Cancel button for alert mode
     canBtn.style.display = (mode === "alert") ? "none" : "";
 
     modal.classList.remove("hidden");
@@ -115,7 +113,6 @@ if (window.electronAPI) {
       if (el) el.click();
     });
   }
-  // Sync menu language with app language
   if (window.electronAPI.setMenuLang) {
     window.electronAPI.setMenuLang(currentLang);
     const origSetLang = setLang;
@@ -187,10 +184,10 @@ let segmentCharMap = [];   // [{charStart, charEnd, timeStart, timeEnd}]
 // Text edit mode
 let _textEditMode = false;
 
-// Feature: segment weight + anchor
+// Segment weight + anchor
 let useWeightEnabled   = false;
 
-// Feature: waveform
+// Waveform
 let useWaveformEnabled = false;
 let _wavesurfer        = null;   // WaveSurfer instance for current audio transcript
 let _wavesurferSeeking = false;  // prevent feedback loop between audio <-> wavesurfer seek
@@ -213,7 +210,7 @@ let _analysisState = {
   showMemos: false,
   anchorOnly: false,
   searchQuery: "",
-  selectedTags: new Set(),    // tom = ingen tagg-filtrering
+  selectedTags: new Set(),  // empty = no tag filtering
   tagFilterMode: "any",       // "any" | "all"
 };
 let _analysisActive = false;
@@ -251,7 +248,7 @@ const PopupManager = (() => {
     el.style.top  = y + "px";
     const w = el.offsetWidth  || opts.estWidth  || 260;
     const h = el.offsetHeight || opts.estHeight || 280;
-    // Viewport clamp (preserves original positionPopup logic).
+    // Viewport clamp
     let left = Math.min(x, window.innerWidth - w - 4);
     let top  = y;
     if (top + h > window.innerHeight && y - h - GAP > 0) {
@@ -358,7 +355,6 @@ async function loadRecentProjects() {
     });
     list.appendChild(li);
   });
-  // Pre-fill most recent
   document.getElementById("open-folder").value = res.recent[0].folder;
   _checkEncrypted(res.recent[0].folder);
 }
@@ -424,7 +420,6 @@ document.getElementById("btn-new").addEventListener("click", async () => {
   errEl.textContent = "";
   if (!folder || !name || !coder) { errEl.textContent = t("error.fill.all"); return; }
 
-  // Encryption
   const encrypt = document.getElementById("new-encrypt").checked;
   let password = "";
   if (encrypt) {
@@ -514,7 +509,6 @@ function _renderPwHints(pw) {
   ).join("");
 }
 
-// Check encryption when folder is selected for open
 async function _checkEncrypted(folder) {
   if (!folder) return;
   const res = await POST("/api/project/check-encrypted", { folder });
@@ -592,7 +586,6 @@ function enterApp(proj, coder, folder) {
   if (uwv) uwv.checked = useWaveformEnabled;
   renderTranscriptList();
   renderCodebook();
-  // Load voice profile status in background
   loadVoiceProfileStatus();
 }
 
@@ -678,13 +671,11 @@ document.getElementById("btn-close-project").addEventListener("click", () => {
   document.getElementById("app").classList.add("hidden");
   document.getElementById("splash").classList.remove("hidden");
   document.getElementById("btn-cancel-switch").classList.remove("hidden");
-  // Restore saved coder name into splash inputs
   const savedCoder = localStorage.getItem(CODER_KEY);
   if (savedCoder) {
     document.getElementById("open-coder").value = savedCoder;
     document.getElementById("new-coder").value  = savedCoder;
   }
-  // Check if the pre-filled folder is encrypted
   const folder = document.getElementById("open-folder").value.trim();
   if (folder) _checkEncrypted(folder);
 });
@@ -832,7 +823,6 @@ function renderTranscriptList() {
   ul.innerHTML = "";
   const transcripts = project.transcripts || [];
 
-  // Group transcripts by category
   const groups = {};          // categoryName -> [{tr, idx}]
   const uncategorized = [];
   transcripts.forEach((tr, idx) => {
@@ -900,7 +890,6 @@ function renderTranscriptList() {
       li.classList.remove("drag-over-above", "drag-over-below");
       const draggedTid = e.dataTransfer.getData("text/plain");
       if (!draggedTid || draggedTid === tr.id) return;
-      // Determine insert position
       const rect = li.getBoundingClientRect();
       const midY = rect.top + rect.height / 2;
       const insertBefore = e.clientY < midY;
@@ -953,7 +942,6 @@ async function _reorderTranscript(draggedTid, targetTid, insertBefore) {
   const list = project.transcripts;
   const dragIdx = list.findIndex(t => t.id === draggedTid);
   if (dragIdx === -1) return;
-  // Remove dragged item
   const [item] = list.splice(dragIdx, 1);
   // Find new target index (after removal)
   let targetIdx = list.findIndex(t => t.id === targetTid);
@@ -963,7 +951,6 @@ async function _reorderTranscript(draggedTid, targetTid, insertBefore) {
   }
   project.transcripts = list;
   renderTranscriptList();
-  // Persist to backend
   const order = list.map(t => t.id);
   await PATCH("/api/transcripts/reorder", { order });
 }
@@ -1000,7 +987,6 @@ function resetTranscriptModal() {
   document.getElementById("diar-options")?.classList.add("hidden");
   const diarCb = document.getElementById("diar-enabled");
   if (diarCb) diarCb.checked = false;
-  // Reset language choice to default and hide Whisper model size
   const lc = document.getElementById("language-choice");
   if (lc) lc.value = "autodetect";
   const mw = document.getElementById("whisper-model-wrap");
@@ -1026,11 +1012,9 @@ document.getElementById("btn-trans-cancel").addEventListener("click", () => {
   }
 });
 
-// Diarization checkbox toggle
 document.getElementById("diar-enabled")?.addEventListener("change", async function () {
   const opts = document.getElementById("diar-options");
   if (this.checked) {
-    // Check if HF token is saved
     const cfg = await GET("/api/config/hf-token");
     if (!cfg.has_token) {
       this.checked = false;
@@ -1045,7 +1029,6 @@ document.getElementById("diar-enabled")?.addEventListener("change", async functi
   }
 });
 
-// Slider live-update display values
 document.getElementById("diar-seg-thr")?.addEventListener("input", function () {
   document.getElementById("diar-seg-val").textContent = parseFloat(this.value).toFixed(2);
 });
@@ -1053,7 +1036,6 @@ document.getElementById("diar-clu-thr")?.addEventListener("input", function () {
   document.getElementById("diar-clu-val").textContent = parseFloat(this.value).toFixed(2);
 });
 
-// File picker — show selected filenames
 document.getElementById("trans-file").addEventListener("change", function () {
   updateFileList(this.files);
 });
@@ -1100,7 +1082,6 @@ function updateFileList(files) {
     li.innerHTML = `<span class="file-icon">${icon}</span><span>${esc(f.name)}</span>`;
     list.appendChild(li);
   });
-  // Pre-fill name if single file
   if (files.length === 1) {
     const nameInput = document.getElementById("trans-name");
     if (!nameInput.value) nameInput.value = files[0].name.replace(/\.[^.]+$/, "");
@@ -1190,9 +1171,8 @@ document.getElementById("btn-trans-confirm").addEventListener("click", async () 
   let imageIdx = 0;
   let audioIdx = 0;
 
-  // Upload files one by one
   for (const file of files) {
-    // Visa "laddar upp"-status innan fetch (syns vid stora filer)
+    // Show upload status before fetch (visible for large files)
     if (isImageFile(file.name)) {
       imageIdx++;
       const uploadLabel = imageFiles.length > 1
@@ -1210,7 +1190,6 @@ document.getElementById("btn-trans-confirm").addEventListener("click", async () 
     formData.append("model", model);
 
     if (isAudioFile(file.name)) {
-      // Append diarization params
       Object.entries(diarSettings).forEach(([k, v]) => { if (v) formData.append(k, v); });
     }
     if (isImageFile(file.name)) {
@@ -1237,9 +1216,8 @@ document.getElementById("btn-trans-confirm").addEventListener("click", async () 
         updateProgressBar(0, "pending");
       }
       if (isAudioFile(file.name)) {
-        // Audio — vänta sekventiellt på transkribering, samla resultatet i
-        // _audioBatch så att talarnamn kan ges för alla filer SAMTIDIGT efter
-        // hela uppladdningen är klar (möjliggör obevakad körning över natten).
+        // Audio: wait for each transcription in turn and collect results in _audioBatch, so speakers
+        // for all files can be named at once after the upload (allows unattended overnight runs).
         audioIdx++;
         const _audN = audioIdx;
         const prefix = audioFiles.length > 1 ? `${t("progress.prefix.file")} ${_audN}/${audioFiles.length} — ` : "";
@@ -1280,7 +1258,7 @@ document.getElementById("btn-trans-confirm").addEventListener("click", async () 
           return;
         }
       }
-      // Bild-OCR — vänta sekventiellt så att nästa fil kan startas efteråt
+      // Image OCR: wait for each job so the next file can start afterwards
       try {
         const _imgN = imageIdx; // capture current index for closure
         const prefix = imageFiles.length > 1 ? `${t("progress.prefix.image")} ${_imgN}/${imageFiles.length} — ` : "";
@@ -1310,7 +1288,7 @@ document.getElementById("btn-trans-confirm").addEventListener("click", async () 
       }
     }
 
-    // Synchronous text/docx response (image/audio jobs hanteras ovan)
+    // Synchronous text/docx response (image and audio jobs are handled above)
     if (data.project) project = data.project;
   }
 
@@ -1318,7 +1296,6 @@ document.getElementById("btn-trans-confirm").addEventListener("click", async () 
   document.getElementById("modal-transcript").classList.add("hidden");
   document.getElementById("btn-trans-confirm").disabled = false;
 
-  // If we collected any audio jobs, open the batch speaker dialog now
   if (_audioBatch.length > 0) {
     openBatchSpeakerDialog();
   }
@@ -1372,7 +1349,7 @@ async function loadVoiceProfileStatus() {
 }
 
 function updateDiarVoiceStatus() {
-  // Röstprofil-funktionen dold tillsvidare — raden förblir dold.
+  // Voice profile feature hidden for now; the row stays hidden.
   return;
 }
 
@@ -1513,7 +1490,6 @@ function openBatchSpeakerDialog() {
   });
 
   document.getElementById("modal-batch-speakers").classList.remove("hidden");
-  // Focus first empty input
   const first = list.querySelector(".batch-spk-input:not([value])") || list.querySelector(".batch-spk-input");
   if (first) first.focus();
 }
@@ -1527,7 +1503,6 @@ async function commitBatchSpeakers(speakerMaps) {
   labelEl.textContent = t("batch.spk.progress.label", { cur: 0, total: speakerMaps.length });
   progEl.classList.remove("hidden");
 
-  // Disable buttons during commit
   document.getElementById("btn-batch-spk-save").disabled = true;
   document.getElementById("btn-batch-spk-skip").disabled = true;
 
@@ -1558,14 +1533,12 @@ async function commitBatchSpeakers(speakerMaps) {
     return;
   }
 
-  // All succeeded
   _audioBatch = [];
   document.getElementById("modal-batch-speakers").classList.add("hidden");
   renderTranscriptList();
 }
 
 document.getElementById("btn-batch-spk-save")?.addEventListener("click", async () => {
-  // Collect speaker maps from inputs
   const maps = _audioBatch.map((job, idx) => {
     const speakers = {};
     document.querySelectorAll(`.batch-spk-input[data-batch-idx="${idx}"]`).forEach(inp => {
@@ -1589,9 +1562,8 @@ document.getElementById("btn-batch-spk-skip")?.addEventListener("click", async (
 // ---------------------------------------------------------------------------
 let _loadTranscriptToken = 0;
 
-// Returnerar true om transkriptet laddades. Vid fel eller om en senare
-// laddning hunnit starta lämnas nuvarande tillstånd orört — annars kunde ett
-// tomt currentText/annotations sparas över riktiga data.
+// Returns true if the transcript loaded. On error, or if a later load has started, the current
+// state is left untouched; otherwise empty text and annotations could be saved over real data.
 async function loadTranscript(tid) {
   const token = ++_loadTranscriptToken;
   const transcript = project.transcripts.find(tr => tr.id === tid);
@@ -1613,7 +1585,6 @@ async function loadTranscript(tid) {
   currentText = textRes.text || "";
   annotations = annRes.annotations || [];
 
-  // Audio player — show/hide + set source
   const audioWrap   = document.getElementById("audio-player-wrap");
   const audioPlayer = document.getElementById("audio-player");
   const modelBadge  = document.getElementById("audio-model-badge");
@@ -1641,7 +1612,6 @@ async function loadTranscript(tid) {
     txtEl.removeAttribute("title");
   }
 
-  // Waveform — init if audio + use_waveform, destroy otherwise
   _destroyWaveform();
   if (useWaveformEnabled && transcript && transcript.source === "audio" && transcript.audio_file) {
     _initWaveform(tid);
@@ -1666,8 +1636,7 @@ async function loadTranscript(tid) {
   if (_hasSourceImg || _hasPhotos) {
     sourceBtn.classList.remove("hidden");
     sourceSep?.classList.remove("hidden");
-    // Restore per-transcript open/boxes state. Default = open (user requested
-    // images to be visible by default; only stay closed if explicitly closed).
+    // Default to open; stay closed only if the user closed it for this transcript.
     const imgState = _sourceImgState[tid];
     const shouldOpen = !imgState || imgState.open !== false;
     if (shouldOpen) {
@@ -1681,19 +1650,16 @@ async function loadTranscript(tid) {
     sourceSep?.classList.add("hidden");
   }
 
-  // Show editor
   document.getElementById("editor-placeholder").classList.add("hidden");
   document.getElementById("editor-content").classList.remove("hidden");
   document.getElementById("editor-title").textContent = transcript ? transcript.name : tid;
   updateAnnBadge();
   clearSearch(true);
 
-  // Highlight active item in sidebar
   document.querySelectorAll("#transcript-list li").forEach(li => {
     li.classList.toggle("active", li.dataset.tid === tid);
   });
 
-  // Show format toolbar
   const toolbar = document.getElementById("editor-toolbar");
   if (toolbar) toolbar.classList.remove("hidden");
   applyFontSettings();
@@ -1757,7 +1723,6 @@ function charOffsetToTime(charOffset) {
 function renderOcrBoxes(boxes) {
   const svg = document.getElementById("ocr-box-overlay");
   if (!svg) return;
-  // Clear previous rects
   while (svg.firstChild) svg.removeChild(svg.firstChild);
   for (const b of boxes) {
     const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
@@ -1853,9 +1818,8 @@ function renderPointPins() {
   });
 }
 
-// Drag eller klick på en pin. Om muspekaren rör sig >4 px under mousedown
-// tolkas det som drag och pinnen flyttas (PATCH av x/y vid mouseup).
-// Annars öppnas detail-popupen vid pinnens position.
+// Drag or click on a pin: moving more than 4 px during mousedown counts as a drag (x/y are
+// PATCHed on mouseup); otherwise the detail popup opens at the pin.
 function _attachPinDragHandlers(pin, ann) {
   let dragging = false;
   let moved = false;
@@ -2018,7 +1982,6 @@ document.getElementById("btn-ocr-photos")?.addEventListener("click", async () =>
       }
       poll();
     });
-    // Reload transcript text
     const txt = await GET(`/api/transcripts/${currentTid}/text`);
     if (txt.text !== undefined) {
       currentText = txt.text;
@@ -2095,7 +2058,6 @@ document.getElementById("btn-text-save")?.addEventListener("click", async () => 
     const titleEl = document.getElementById("editor-title");
     const currentName = titleEl.textContent;
 
-    // Replace span with input
     const input = document.createElement("input");
     input.id = "editor-title-input";
     input.type = "text";
@@ -2104,9 +2066,12 @@ document.getElementById("btn-text-save")?.addEventListener("click", async () => 
     input.focus();
     input.select();
 
+    // Removing the focused input fires blur, which would commit again (or commit after Escape)
+    let finished = false;
     async function commitRename() {
+      if (finished) return;
+      finished = true;
       const newName = input.value.trim();
-      // Restore span first
       const span = document.createElement("span");
       span.id = "editor-title";
       input.replaceWith(span);
@@ -2122,11 +2087,9 @@ document.getElementById("btn-text-save")?.addEventListener("click", async () => 
         await appAlert(res.error);
         return;
       }
-      // Update in-memory project data
       const tr = (project.transcripts || []).find(t => t.id === currentTid);
       if (tr) tr.name = newName;
       span.textContent = newName;
-      // Update sidebar list item
       const li = document.querySelector(`#transcript-list li[data-tid="${currentTid}"] .trans-name`);
       if (li) li.textContent = newName;
     }
@@ -2134,6 +2097,7 @@ document.getElementById("btn-text-save")?.addEventListener("click", async () => 
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") { e.preventDefault(); commitRename(); }
       if (e.key === "Escape") {
+        finished = true;
         const span = document.createElement("span");
         span.id = "editor-title";
         span.textContent = currentName;
@@ -2259,9 +2223,7 @@ document.getElementById("transcript-text").addEventListener("click", e => {
     const time = charOffsetToTime(charOffset);
     if (time !== null) {
       const player = document.getElementById("audio-player");
-      // Seek to the clicked position. If the player is already playing it
-      // continues from the new time; if paused it stays paused. This prevents
-      // accidental playback while coding (annotating text).
+      // Seeking keeps the play/pause state, so coding never starts playback by accident.
       if (player) { player.currentTime = time; }
     }
   }
@@ -2317,7 +2279,6 @@ async function redo() {
   redoStack.pop();
 
   if (action.type === "add") {
-    // Re-add annotation
     const res = await POST(`/api/transcripts/${action.tid}/annotations`, _annPostBody(action.ann));
     if (res.ok) {
       annotations.push(res.annotation);
@@ -2327,7 +2288,6 @@ async function redo() {
       pushRedo(action);
     }
   } else if (action.type === "delete") {
-    // Re-delete annotation
     const res = await DEL(`/api/transcripts/${action.tid}/annotations/${action.ann.id}`);
     if (res.ok) {
       annotations = annotations.filter(a => a.id !== action.ann.id);
@@ -2348,7 +2308,6 @@ document.getElementById("transcript-text").addEventListener("mouseup", e => {
   const text = sel.toString();
   if (!text.trim()) return;
 
-  // Calculate character offsets
   const container = document.getElementById("transcript-text");
   const range = sel.getRangeAt(0);
   const preRange = document.createRange();
@@ -2381,7 +2340,6 @@ function showAnnPopup(x, y) {
   const popup = document.getElementById("ann-popup");
   popup.classList.remove("hidden");
   document.getElementById("ann-memo").value = "";
-  // Weight row
   const weightRow = document.getElementById("ann-weight-row");
   if (weightRow) weightRow.classList.toggle("hidden", !useWeightEnabled);
   const weightInput = document.getElementById("ann-weight");
@@ -2393,11 +2351,8 @@ function showAnnPopup(x, y) {
   positionPopup(popup, x, y);
 }
 
-// Prevent clicks inside the annotation popup from collapsing the text selection.
-// For non-input elements (code list items, buttons, labels, etc.) we call
-// preventDefault on mousedown so the browser doesn't move focus and collapse
-// the selection.  Input/textarea elements are excluded so typing still works;
-// for those we restore the saved selection range via a focus handler.
+// preventDefault on mousedown keeps the transcript selection when clicking in the popup;
+// inputs are exempt so typing works, and the focusin handler below restores the selection.
 document.getElementById("ann-popup").addEventListener("mousedown", e => {
   const tag = e.target.tagName;
   if (tag !== "INPUT" && tag !== "TEXTAREA") {
@@ -2405,8 +2360,7 @@ document.getElementById("ann-popup").addEventListener("mousedown", e => {
   }
 });
 
-// When an input inside the popup gains focus, restore the saved transcript
-// selection so the highlight remains visible.
+// Restore the saved selection when a popup input gains focus, so the highlight stays visible.
 document.getElementById("ann-popup").addEventListener("focusin", () => {
   if (_savedSelRange) {
     const sel = window.getSelection();
@@ -2459,7 +2413,6 @@ document.getElementById("btn-ann-confirm").addEventListener("click", async () =>
       { code_id: newCodeId }
     ).then(res => {
       if (!res.ok) {
-        // Rollback optimistic update
         const rollbackAnn = annotations.find(a => a.id === editId);
         if (rollbackAnn && prevCodeId !== null) {
           rollbackAnn.code_id = prevCodeId;
@@ -2521,7 +2474,6 @@ document.getElementById("btn-ann-cancel").addEventListener("click", hideAnnPopup
 // Annotation picker (overlapping annotations)
 // ---------------------------------------------------------------------------
 function _showAnnPicker(annIds, pos) {
-  // Remove any existing picker
   document.getElementById("ann-picker")?.remove();
 
   const picker = document.createElement("div");
@@ -2566,13 +2518,11 @@ function _showAnnPicker(annIds, pos) {
 
   document.body.appendChild(picker);
 
-  // Position near click
   const x = Math.min(pos.clientX, window.innerWidth - 310);
   const y = Math.min(pos.clientY, window.innerHeight - picker.offsetHeight - 10);
   picker.style.left = x + "px";
   picker.style.top = y + "px";
 
-  // Close on outside click
   const closeHandler = (e) => {
     if (!picker.contains(e.target)) {
       picker.remove();
@@ -2596,7 +2546,6 @@ function showAnnDetail(annId, posOverride) {
   codeEl.title = t("ann.change.code");
   codeEl.style.cursor = "pointer";
   document.getElementById("ann-detail-memo").value = ann.memo || "";
-  // Weight
   const weightRow = document.getElementById("ann-detail-weight-row");
   if (weightRow) {
     weightRow.classList.toggle("hidden", !useWeightEnabled);
@@ -2604,7 +2553,6 @@ function showAnnDetail(annId, posOverride) {
     const wv = document.getElementById("ann-detail-weight-val");
     if (wi) { wi.value = ann.weight ?? 50; if (wv) wv.textContent = wi.value; }
   }
-  // Anchor
   const anchorRow = document.getElementById("ann-detail-anchor-row");
   if (anchorRow) {
     anchorRow.classList.remove("hidden");  // always visible (anchor is free of use_weight)
@@ -2694,7 +2642,6 @@ document.getElementById("ann-detail-code").addEventListener("click", () => {
   const weightRow = document.getElementById("ann-weight-row");
   if (weightRow) weightRow.classList.add("hidden");
   renderAnnCodeList();
-  // Position near the original detail popup location
   const detail = document.getElementById("ann-detail");
   const r = detail.getBoundingClientRect();
   positionPopup(popup, r.left, r.top + window.scrollY);
@@ -2753,7 +2700,6 @@ function openCodeModal(code, prefillName) {
   document.getElementById("code-description").value = code ? (code.description || "") : "";
   document.getElementById("code-error").textContent = "";
 
-  // Build parent select
   const sel = document.getElementById("code-parent");
   sel.innerHTML = `<option value="">${esc(t("code.parent.none"))}</option>`;
   buildFlatList(project.codes || []).forEach(c => {
@@ -2770,7 +2716,6 @@ function openCodeModal(code, prefillName) {
   const delBtn = document.getElementById("btn-code-delete");
   delBtn.classList.toggle("hidden", !code);
 
-  // Initialise colour palette
   const chosenColor = document.getElementById("code-color").value;
   if (typeof selectPaletteColor === "function") {
     selectPaletteColor(chosenColor);
@@ -2807,7 +2752,7 @@ document.getElementById("btn-code-confirm").addEventListener("click", async () =
   if (res.error) { errEl.textContent = res.error; return; }
   project = res.project;
   renderCodebook();
-  if (currentTid) renderTranscriptText(); // Refresh highlight colors
+  if (currentTid) renderTranscriptText();
   document.getElementById("modal-code").classList.add("hidden");
   _refreshCodebookManagerIfOpen();
 
@@ -2922,7 +2867,7 @@ document.getElementById("btn-export-confirm").addEventListener("click", async ()
 });
 
 // ---------------------------------------------------------------------------
-// Merge
+// Import codings
 // ---------------------------------------------------------------------------
 document.getElementById("btn-merge").addEventListener("click", () => {
   document.getElementById("merge-result").textContent = "";
@@ -3032,7 +2977,6 @@ function applyTheme(theme) {
   if (btnSplash) btnSplash.textContent = label;
 }
 
-// Restore saved preference
 applyTheme(localStorage.getItem(THEME_KEY) || "dark");
 
 function _toggleTheme() {
@@ -3311,7 +3255,6 @@ document.getElementById("ctx-categorize").addEventListener("click", () => {
 
 function openCategorizeModal(tids) {
   _categorizeTids = tids;
-  // Populate datalist with all distinct categories in the project
   const cats = [...new Set((project.transcripts || []).map(tr => tr.category).filter(Boolean))].sort();
   const dl = document.getElementById("cat-datalist");
   dl.innerHTML = cats.map(c => `<option value="${esc(c)}">`).join("");
@@ -3365,7 +3308,6 @@ document.getElementById("ctx-tag")?.addEventListener("click", () => {
 
 function openTagModal(tids) {
   _tagTids = tids;
-  // Datalist: all unique tags in the project
   const allTags = [...new Set((project.transcripts || []).flatMap(tr => tr.tags || []))].sort();
   document.getElementById("tag-datalist").innerHTML = allTags.map(c => `<option value="${esc(c)}">`).join("");
   renderTagModalChips();
@@ -3394,7 +3336,7 @@ async function addTagToSelection(tag) {
   const res = await PATCH("/api/transcripts/tag", { tids: _tagTids, add: [tag] });
   if (res.ok) {
     project = res.project;
-    _annChangeCounter++;  // analysvyn läser om data och städar taggfiltret
+    _annChangeCounter++;  // analysis view reloads and prunes the tag filter
     renderTagModalChips();
     renderTranscriptList();
     // Refresh datalist so the new tag is autocomplete-able for further input
@@ -3407,7 +3349,7 @@ async function removeTagFromSelection(tag) {
   const res = await PATCH("/api/transcripts/tag", { tids: _tagTids, remove: [tag] });
   if (res.ok) {
     project = res.project;
-    _annChangeCounter++;  // analysvyn läser om data och städar taggfiltret
+    _annChangeCounter++;  // analysis view reloads and prunes the tag filter
     renderTagModalChips();
     renderTranscriptList();
   }
@@ -3523,7 +3465,6 @@ async function computeIRR() {
   const res = await GET(`/api/transcripts/${tid}/irr?coder_a=${encodeURIComponent(coderA)}&coder_b=${encodeURIComponent(coderB)}`);
   if (res.error) { errEl.textContent = res.error; return; }
 
-  // Kappa display
   const k = res.kappa;
   const kColor = k >= 0.6 ? "var(--success)" : k >= 0.4 ? "#f9c74f" : "var(--danger)";
   document.getElementById("irr-kappa-display").innerHTML = `
@@ -3533,7 +3474,6 @@ async function computeIRR() {
       <span class="kappa-sub">Po = ${res.po} · Pe = ${res.pe} · ${esc(t("irr.n.chars", { n: res.n_chars.toLocaleString() }))}</span>
     </div>`;
 
-  // Per-code table
   const tbody = document.getElementById("irr-table-body");
   tbody.innerHTML = res.per_code.map(row => `
     <tr>
@@ -3547,7 +3487,7 @@ async function computeIRR() {
 }
 
 // ============================================================
-// FEATURE 1: Resizable panels
+// Resizable panels
 // ============================================================
 
 const PANEL_KEY = "transcribbler_panels";
@@ -3638,7 +3578,7 @@ const PANEL_KEY = "transcribbler_panels";
 
 
 // ============================================================
-// FEATURE 2: Text formatting overlay (bold / italic)
+// Text formatting overlay (bold / italic)
 // ============================================================
 
 function applyFontSettings() {
@@ -3721,8 +3661,7 @@ function applyFormatSpans() {
 
   const sorted = [...formattingSpans].sort((a, b) => a.start - b.start);
 
-  // Build char map once; DOM doesn't change between span applications
-  // (each surroundContents may split text nodes, so rebuild after each wrap)
+  // Rebuild the char map for each span: surroundContents splits text nodes
   for (const span of sorted) {
     if (container.querySelector(`[data-fmt-id="${span.id}"]`)) continue;
 
@@ -3766,7 +3705,7 @@ updateFmtBtnStates();
 
 
 // ============================================================
-// FEATURE 3: Colorblind-safe color palette (Wong 2011)
+// Colour-blind-safe palette (Wong 2011)
 // ============================================================
 
 const PALETTE_PRIMARY = [
@@ -3875,13 +3814,12 @@ function initColorPalette() {
   document.getElementById("code-parent").addEventListener("change", updateParentShades);
 }
 
-// Palette is initialised in openCodeModal directly (see that function)
 
 initColorPalette();
 
 
 // ============================================================
-// FEATURE 4: Auto-numbering of codes
+// Auto-numbering of codes
 // ============================================================
 
 document.getElementById("setting-numbering").addEventListener("change", async function() {
@@ -3909,7 +3847,6 @@ document.getElementById("setting-use-waveform")?.addEventListener("change", asyn
   useWaveformEnabled = this.checked;
   await PATCH("/api/project/settings", { use_waveform: useWaveformEnabled });
   if (project) project.use_waveform = useWaveformEnabled;
-  // Re-apply to current transcript
   if (currentTid) {
     const transcript = (project?.transcripts || []).find(t => t.id === currentTid);
     _destroyWaveform();
@@ -3949,12 +3886,10 @@ function addNumbersToCodebook(tree) {
   walk(tree);
 }
 
-// (renderCodebook now calls assignNumbers/addNumbersToCodebook directly)
-
 
 // ============================================================
 // ============================================================
-// FEATURE 5b: Codebook manager modal
+// Codebook manager modal
 // ============================================================
 
 document.getElementById("btn-codebook").addEventListener("click", openCodebookManager);
@@ -4115,7 +4050,7 @@ function _refreshCodebookManagerIfOpen() {
 }
 
 // ============================================================
-// FEATURE 5: Code tree view modal
+// Code tree view modal
 // ============================================================
 
 document.getElementById("btn-codetree").addEventListener("click", openCodeTree);
@@ -4158,7 +4093,7 @@ function openCodeTree() {
 }
 
 // ============================================================
-// FEATURE 6: Project-wide search
+// Project-wide search
 // ============================================================
 
 document.getElementById("btn-project-search").addEventListener("click", openProjectSearch);
@@ -4200,7 +4135,6 @@ function _makeSnippetEl(match, query, tid) {
     document.getElementById("search-input").value = query;
     openSearch();
     runSearch();
-    // Navigate to the specific occurrence
     const idx = searchMatches.findIndex(m => m.start === match.start);
     if (idx !== -1) { searchIndex = idx; scrollToMatch(); updateSearchCount(); }
   });
@@ -4246,7 +4180,6 @@ async function runProjectSearch() {
     const groupEl = document.createElement("div");
     groupEl.className = "proj-search-group";
 
-    // Header
     const header = document.createElement("div");
     header.className = "proj-search-group-header";
     const matchWord = group.matches.length === 1
@@ -4257,7 +4190,6 @@ async function runProjectSearch() {
       `<span class="proj-search-group-name">${esc(group.name)}</span>` +
       `<span class="proj-search-group-count">${group.matches.length} ${matchWord}</span>`;
 
-    // Snippets
     const snippetWrap = document.createElement("div");
     snippetWrap.className = "proj-search-snippets";
 
@@ -4280,7 +4212,6 @@ async function runProjectSearch() {
       snippetWrap.appendChild(moreEl);
     }
 
-    // Collapse/expand on header click
     header.addEventListener("click", () => {
       const closing = !snippetWrap.classList.contains("hidden");
       snippetWrap.classList.toggle("hidden", closing);
@@ -4369,7 +4300,7 @@ function renderCtNode(node, depth) {
 
 
 // ============================================================
-// FEATURE 6: Searchable code popup with "create new" option
+// Searchable code popup with "create new" option
 // ============================================================
 
 function _buildNumberedFlat() {
@@ -4427,9 +4358,8 @@ function setupAnnSearch() {
       const byId = {};
       flat.forEach(c => { byId[c.id] = c; });
       const recent = recentIds.map(id => byId[id]).filter(Boolean).slice(0, 5);
-      // If we have <5 recently used, fill remaining slots with most recently
-      // CREATED codes (newest first) — matches user expectation that newly
-      // made codes are top-of-mind even if not used yet.
+      // Fewer than five recent codes: fill up with the newest created codes, which users expect
+      // to see first even before they have been used.
       if (recent.length < 5) {
         const seen = new Set(recent.map(c => c.id));
         const unused = flat.filter(c => !seen.has(c.id));
@@ -4472,7 +4402,6 @@ function setupAnnSearch() {
 
   if (searchInput) {
     searchInput.value = "";
-    // Remove previous handler if any
     if (searchInput._annHandler) {
       searchInput.removeEventListener("input", searchInput._annHandler);
     }
@@ -4676,7 +4605,7 @@ document.getElementById("language-choice")?.addEventListener("change", _updateMo
 
 
 // ============================================================
-// FEATURE: Code tooltip (hover on code in right sidebar)
+// Code tooltip (hover on code in right sidebar)
 // ============================================================
 (function () {
   const tree = document.getElementById("codebook-tree");
@@ -4711,7 +4640,7 @@ document.getElementById("language-choice")?.addEventListener("change", _updateMo
 
 
 // ============================================================
-// FEATURE: Segment weight slider live update
+// Segment weight slider live update
 // ============================================================
 document.getElementById("ann-weight")?.addEventListener("input", function () {
   document.getElementById("ann-weight-val").textContent = this.value;
@@ -4722,7 +4651,7 @@ document.getElementById("ann-detail-weight")?.addEventListener("input", function
 
 
 // ============================================================
-// FEATURE: Code matrix modal (transkript × kod)
+// Code matrix modal (transcript × code)
 // ============================================================
 document.getElementById("btn-code-matrix")?.addEventListener("click", openCodeMatrix);
 document.getElementById("btn-code-matrix-close")?.addEventListener("click", () => {
@@ -4745,7 +4674,6 @@ function renderCodeMatrix(data, wrap) {
   }
   const table = document.createElement("table");
   table.className = "matrix-table";
-  // Header row
   const thead = table.createTHead();
   const hrow  = thead.insertRow();
   const th0   = document.createElement("th");
@@ -4758,7 +4686,6 @@ function renderCodeMatrix(data, wrap) {
     th.innerHTML = `<span style="color:${esc(c.color)}">■</span> ${esc(c.name)}`;
     hrow.appendChild(th);
   });
-  // Data rows
   const tbody = table.createTBody();
   data.transcripts.forEach(tr => {
     const row = tbody.insertRow();
@@ -4773,7 +4700,6 @@ function renderCodeMatrix(data, wrap) {
       td.className   = count === 0 ? "matrix-cell-zero" : "";
     });
   });
-  // Totals row
   const tfoot = table.createTFoot();
   const frow  = tfoot.insertRow();
   const ftd0  = document.createElement("td");
@@ -4793,7 +4719,7 @@ function renderCodeMatrix(data, wrap) {
 
 
 // ============================================================
-// FEATURE: Co-occurrence modal (kod × kod)
+// Co-occurrence modal (code × code)
 // ============================================================
 document.getElementById("btn-cooccurrence")?.addEventListener("click", openCooccurrence);
 document.getElementById("btn-cooccurrence-close")?.addEventListener("click", () => {
@@ -4818,7 +4744,6 @@ function renderCooccurrence(data, wrap) {
   const matrix = data.matrix;
   const table  = document.createElement("table");
   table.className = "matrix-table";
-  // Header
   const thead = table.createTHead();
   const hrow  = thead.insertRow();
   const th0   = document.createElement("th");
@@ -4830,7 +4755,6 @@ function renderCooccurrence(data, wrap) {
     th.innerHTML = `<span style="color:${esc(c.color)}">■</span> ${esc(c.name)}`;
     hrow.appendChild(th);
   });
-  // Data rows
   const tbody = table.createTBody();
   codes.forEach(ca => {
     const row = tbody.insertRow();
@@ -4856,7 +4780,7 @@ function renderCooccurrence(data, wrap) {
 
 
 // ============================================================
-// FEATURE: Waveform (WaveSurfer.js)
+// Waveform (WaveSurfer.js)
 // ============================================================
 function _initWaveform(tid) {
   if (!window.WaveSurfer) return;
@@ -4889,7 +4813,6 @@ function _initWaveform(tid) {
   // Cache peaks after first decode to skip re-download next time
   _wavesurfer.on("ready", () => _cacheWaveformPeaks(tid));
 
-  // Clicking waveform seeks audio player
   _wavesurfer.on("interaction", pos => {
     if (!audioPlayer) return;
     _wavesurferSeeking = true;
@@ -4906,7 +4829,6 @@ function _initWaveform(tid) {
   const wfCtrl = document.getElementById("waveform-controls");
   if (wfCtrl) { wfCtrl.classList.remove("hidden"); wfCtrl.style.display = "flex"; }
 
-  // Play/pause button
   const wfPlayBtn = document.getElementById("wf-play-pause");
   const wfTime    = document.getElementById("wf-time");
   const wfVolume  = document.getElementById("wf-volume");
@@ -5056,17 +4978,14 @@ function toggleView(view) {
   const isCoding = view === "coding";
   _analysisActive = !isCoding;
 
-  // Toggle buttons
   document.getElementById("btn-view-coding").classList.toggle("active", isCoding);
   document.getElementById("btn-view-analysis").classList.toggle("active", !isCoding);
 
-  // Toggle coding view elements
   ["sidebar-left", "handle-left", "editor-pane", "handle-right", "sidebar-right"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.toggle("hidden", !isCoding);
   });
 
-  // Toggle analysis view
   document.getElementById("analysis-view").classList.toggle("hidden", isCoding);
 
   if (!isCoding) {
@@ -5085,7 +5004,7 @@ function _projectAllTags() {
   return [...new Set((project?.transcripts || []).flatMap(tr => tr.tags || []))].sort();
 }
 
-// mode "all" = transkriptet måste ha samtliga valda taggar, annars räcker en.
+// mode "all": the transcript must have every selected tag; otherwise one is enough.
 function _transcriptMatchesTags(trTags, selectedTags, mode) {
   if (!selectedTags.size) return true;
   const have = new Set(trTags || []);
@@ -5102,7 +5021,7 @@ function _countMatchingTranscripts(selectedTags, mode) {
   return transcripts.filter(tr => _transcriptMatchesTags(tr.tags, selectedTags, mode)).length;
 }
 
-// Utdrag som återstår efter taggfiltret (före kod-, ankar- och sökfilter).
+// Excerpts left after the tag filter (before code, anchor and search filters).
 function _tagFilteredExcerpts() {
   if (!_analysisData) return [];
   const sel = _analysisState.selectedTags;
@@ -5114,8 +5033,7 @@ function _tagFilteredExcerpts() {
   return _analysisData.excerpts.filter(e => matching.has(e.transcript_id));
 }
 
-// Anropas av applyTranslations(): etiketter som byggs i JS och därför inte
-// kan bära data-i18n.
+// Called by applyTranslations(): labels built in JS cannot carry data-i18n.
 function refreshDynamicLabels() {
   if (_currentCoder) {
     document.getElementById("coder-badge").textContent = t("topbar.coder.badge", { coder: _currentCoder });
@@ -5143,11 +5061,9 @@ function openTagFilterModal() {
     selectedTags: new Set(_analysisState.selectedTags),
     mode: _analysisState.tagFilterMode,
   };
-  // Mode radios
   document.querySelectorAll('input[name="tag-filter-mode"]').forEach(r => {
     r.checked = (r.value === _pendingTagFilter.mode);
   });
-  // Tag list
   renderTagFilterList();
   updateTagFilterMeta();
   document.getElementById("modal-analysis-tag-filter").classList.remove("hidden");
@@ -5224,7 +5140,7 @@ document.getElementById("btn-tag-filter-cancel")?.addEventListener("click", () =
 
 
 async function jumpToExcerpt(e) {
-  // Backtracka citat: byt till kodningsvyn och scrolla till annoteringen
+  // Jump to excerpt: switch to the coding view and scroll to the annotation
   toggleView("coding");
   if (currentTid !== e.transcript_id) {
     selectedTids.clear();
@@ -5232,11 +5148,11 @@ async function jumpToExcerpt(e) {
     renderTranscriptList();
     if (!ok) return;
   }
-  // Vänta en frame så att DOM:en hinner renderas
+  // Wait one frame so the DOM is rendered
   requestAnimationFrame(() => {
     if (highlightAnnotation(e.id)) return;
-    // Annan kodares annotering visas inte i kodningsvyn — markera textomfånget
-    // tillfälligt och berätta varför.
+    // Another coder's annotation is not shown in the coding view: highlight the range
+    // temporarily and say why.
     if (e.kind === "text" && e.end > e.start) highlightTextRange(e.start, e.end);
     if (e.coder && e.coder !== _currentCoder) {
       appAlert(t("analysis.jump.other.coder", { coder: e.coder }));
@@ -5244,14 +5160,14 @@ async function jumpToExcerpt(e) {
   });
 }
 
-// Returnerar true om annoteringen hittades i DOM:en.
+// Returns true if the annotation was found in the DOM.
 function highlightAnnotation(annId) {
-  // En annotering kan täcka flera spann, och vid överlapp står den bara i
-  // data-ann-ids (data-ann-id bär endast den primära).
+  // An annotation can span several segments; on overlap it is only in data-ann-ids
+  // (data-ann-id holds the primary one).
   let els = [...document.querySelectorAll(".annotation-span[data-ann-ids]")]
     .filter(el => el.dataset.annIds.split(",").includes(annId));
   if (!els.length) {
-    // Fall tillbaka på pin (för bild-annoteringar)
+    // Fall back to pins (image annotations)
     els = [...document.querySelectorAll(".point-pin")].filter(el => el.dataset.annId === annId);
   }
   if (!els.length) return false;
@@ -5261,8 +5177,8 @@ function highlightAnnotation(annId) {
   return true;
 }
 
-// Tillfällig markering av ett teckenomfång utan att röra DOM:en (CSS Custom
-// Highlight API); faller tillbaka på enbart scroll där API:t saknas.
+// Temporary highlight of a character range without touching the DOM (CSS Custom
+// Highlight API); falls back to scrolling only where the API is missing.
 function highlightTextRange(start, end) {
   const container = document.getElementById("transcript-text");
   if (!container) return;
@@ -5286,7 +5202,7 @@ async function loadAnalysisData() {
   try {
     _analysisData = await GET("/api/analysis/excerpts");
     _analysisLastCounter = _annChangeCounter;
-    // Städa bort taggar som inte längre finns i projektet
+    // Drop tags that no longer exist in the project
     const allTags = new Set(_projectAllTags());
     for (const tg of [..._analysisState.selectedTags]) {
       if (!allTags.has(tg)) _analysisState.selectedTags.delete(tg);
@@ -5307,7 +5223,7 @@ function renderAnalysisCodebook() {
   const codes = project.codes || [];
   const tree = buildTree(codes);
   if (numberingEnabled) assignNumbers(tree, "");
-  // Räkna klientsidan så att antalen följer taggfiltret
+  // Count client-side so the counts follow the tag filter
   const counts = {};
   for (const e of _tagFilteredExcerpts()) counts[e.code_id] = (counts[e.code_id] || 0) + 1;
 
@@ -5372,12 +5288,6 @@ function onAnalysisCodeToggle(codeId, checked, node) {
       if (checked) _analysisState.selectedCodes.add(id);
       else _analysisState.selectedCodes.delete(id);
     }
-    // Update checkbox states in DOM
-    document.querySelectorAll("#analysis-codebook-tree .analysis-code-item input[type='checkbox']").forEach(cb => {
-      const item = cb.closest(".analysis-code-item");
-      const dot = item?.querySelector(".code-dot");
-      // Find code by matching — re-render is simpler
-    });
     renderAnalysisCodebook();
   }
   renderAnalysisContent();
@@ -5424,7 +5334,7 @@ function _highlightText(text, query) {
 
 function _updateAnalysisExportButton() {
   const btn = document.getElementById("btn-analysis-export");
-  // Always enable — "Exportera allt" and "Alla nyckelpassager" work without code selection
+  // Always enabled: "Export all" and "All key passages" work without a code selection
   btn.disabled = false;
   btn.title = "";
 }
@@ -5451,9 +5361,9 @@ function renderAnalysisContent() {
   container.innerHTML = "";
 
   if (mode === "separate") {
-    renderCodeInCodeMode(container, excerpts, showMemos, exportMode, searchQ);
-  } else {
     renderSeparateMode(container, excerpts, showMemos, exportMode, searchQ);
+  } else {
+    renderCodeInCodeMode(container, excerpts, showMemos, exportMode, searchQ);
   }
 }
 
@@ -5462,13 +5372,13 @@ function _createExcerptCard(e, showMemos, exportMode, searchQ) {
   card.className = "analysis-excerpt-card";
   card.dataset.excerptId = e.id;
   if (e.anchor) card.classList.add("anchor-card");
-  // Clickable card → jump to annotation in coding view (Funktion: backtracka citat)
+  // Clickable card → jump to annotation in coding view
   if (!exportMode) {
     card.classList.add("clickable");
     card.title = t("analysis.jump.tooltip");
     card.addEventListener("click", (ev) => {
       if (ev.target.closest("input, button, a, mark")) return;
-      // Låt användaren markera och kopiera citat utan att navigera bort
+      // Let the user select and copy excerpt text without navigating away
       if (window.getSelection().toString()) return;
       jumpToExcerpt(e);
     });
@@ -5514,11 +5424,9 @@ function _createExcerptCard(e, showMemos, exportMode, searchQ) {
   return card;
 }
 
-function renderSeparateMode(container, excerpts, showMemos, exportMode, searchQ) {
-  // Kod-i-kod (inline) mode: show text passages with overlapping code
-  // highlights rendered inline, similar to the coding view.
-  // Group overlapping excerpts from the same transcript region into one
-  // merged block where each code's color appears as an inline highlight.
+function renderCodeInCodeMode(container, excerpts, showMemos, exportMode, searchQ) {
+  // Overlapping excerpts from the same transcript region are
+  // merged into one block with each code's colour as an inline highlight.
 
   if (!excerpts.length) return;
 
@@ -5526,8 +5434,7 @@ function renderSeparateMode(container, excerpts, showMemos, exportMode, searchQ)
   const codeMap = {};
   codes.forEach(c => codeMap[c.id] = c);
 
-  // Group excerpts by transcript + overlapping region
-  // Key: transcript_id. Within each transcript, merge overlapping ranges.
+  // Group by transcript, then merge overlapping ranges within each.
   const byTranscript = {};
   const transcriptOrder = [];
   for (const e of excerpts) {
@@ -5540,15 +5447,12 @@ function renderSeparateMode(container, excerpts, showMemos, exportMode, searchQ)
 
   for (const tid of transcriptOrder) {
     const group = byTranscript[tid];
-    // Sort by start position
     group.sort((a, b) => a.start - b.start || a.end - b.end);
 
-    // Merge overlapping excerpts into clusters
     const clusters = [];
     let cur = null;
     for (const e of group) {
       if (cur && e.start < cur.end) {
-        // Overlapping — extend cluster
         cur.end = Math.max(cur.end, e.end);
         cur.excerpts.push(e);
       } else {
@@ -5588,7 +5492,6 @@ function renderSeparateMode(container, excerpts, showMemos, exportMode, searchQ)
       header.appendChild(label);
       card.appendChild(header);
 
-      // Code legend showing which codes are in this cluster
       const legend = document.createElement("div");
       legend.className = "code-inline-legend";
       const seenCodes = new Set();
@@ -5606,7 +5509,6 @@ function renderSeparateMode(container, excerpts, showMemos, exportMode, searchQ)
       }
       card.appendChild(legend);
 
-      // Text body with inline highlights
       const textEl = document.createElement("div");
       textEl.className = "analysis-excerpt-text";
 
@@ -5660,7 +5562,6 @@ function renderSeparateMode(container, excerpts, showMemos, exportMode, searchQ)
       }
       card.appendChild(textEl);
 
-      // Memos
       if (showMemos) {
         for (const e of exs) {
           if (e.memo) {
@@ -5673,7 +5574,6 @@ function renderSeparateMode(container, excerpts, showMemos, exportMode, searchQ)
         }
       }
 
-      // Export checkbox
       if (exportMode) {
         const cb = document.createElement("input");
         cb.type = "checkbox";
@@ -5693,7 +5593,7 @@ function renderSeparateMode(container, excerpts, showMemos, exportMode, searchQ)
   }
 }
 
-function renderCodeInCodeMode(container, excerpts, showMemos, exportMode, searchQ) {
+function renderSeparateMode(container, excerpts, showMemos, exportMode, searchQ) {
   if (!project) return;
   const codes = project.codes || [];
   const tree = buildTree(codes);
@@ -5801,7 +5701,6 @@ document.getElementById("btn-analysis-export").addEventListener("click", () => {
   // Enable/disable the "excerpts" radio based on export mode
   const excerptRadio = document.querySelector('input[name="analysis-export-type"][value="excerpts"]');
   if (excerptRadio) excerptRadio.disabled = !_analysisState.exportMode;
-  // Default to "codes" selection
   const codesRadio = document.querySelector('input[name="analysis-export-type"][value="codes"]');
   if (codesRadio) codesRadio.checked = true;
 });
@@ -5879,7 +5778,6 @@ async function doAnalysisExport(format) {
       // Allow layout to settle before capture
       await new Promise(r => setTimeout(r, 50));
       const canvas = await html2canvas(el, { backgroundColor: "#ffffff", scale: 2, useCORS: true });
-      // Restore original styles
       el.classList.remove("png-export-ready");
       el.style.maxHeight = prevHeight;
       el.style.overflow = prevOverflow;
@@ -5903,7 +5801,7 @@ async function doAnalysisExport(format) {
   const body = {
     format,
     anchor_only: false,
-    // Taggfiltret avgränsar urvalet för alla exporttyper, liksom i vyn och PNG
+    // The tag filter limits the selection for every export type, as in the view and PNG
     tags: [..._analysisState.selectedTags],
     tag_mode: _analysisState.tagFilterMode,
   };

@@ -652,10 +652,6 @@ body.electron-mac #tools-dropdown {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
-/* ============================================================
-   NEW FEATURES
-   ============================================================ */
-
 /* ---- Drag handles ---- */
 .drag-handle {
   width: 4px;
@@ -694,7 +690,7 @@ body.electron-mac #tools-dropdown {
 .fmt-span { cursor: pointer; }
 .fmt-span:hover { opacity: .7; }
 
-/* ---- Color palette ---- */
+/* ---- Colour palette ---- */
 #color-palette { margin-top: 6px; }
 .palette-preview-row {
   display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
@@ -792,7 +788,7 @@ body.electron-mac #tools-dropdown {
 }
 .diar-voice-status.no-profile { color: var(--text-dim); }
 
-/* Speaker naming dialog — voice match hints */
+/* Speaker naming — voice match hints */
 .spk-match-badge {
   font-size: 11px; padding: 1px 6px; border-radius: 10px;
   background: var(--accent); color: var(--bg); font-weight: 600;
@@ -955,7 +951,7 @@ body.electron-mac #tools-dropdown {
 #hf-token-status { font-size: 12px; margin-top: 6px; min-height: 18px; }
 
 /* ============================================================
-   Speaker naming dialog
+   Speaker naming rows (batch dialog)
    ============================================================ */
 .speaker-name-row {
   display: grid; grid-template-columns: 110px 18px 1fr;
@@ -1431,7 +1427,7 @@ button:disabled {
 .analysis-excerpt-card.clickable { cursor: pointer; transition: box-shadow 0.12s ease; }
 .analysis-excerpt-card.clickable:hover { box-shadow: 0 0 0 2px var(--accent); }
 
-/* Transcript tag chips (sidolisten) */
+/* Transcript tag chips (sidebar list) */
 .trans-tags {
   display: inline-flex;
   flex-wrap: wrap;
@@ -1520,7 +1516,7 @@ button:disabled {
 .point-pin.jump-highlight {
   animation: jump-pulse 1.5s ease-out;
 }
-/* Tillfällig markering av annan kodares utdrag (CSS Custom Highlight API) */
+/* Temporary highlight of another coder's excerpt (CSS Custom Highlight API) */
 ::highlight(jump-range) {
   background-color: var(--accent);
   color: #fff;
@@ -1564,7 +1560,7 @@ button:disabled {
   text-align: center;
   padding: 40px 20px;
 }
-/* Kod-i-kod (inline) mode */
+/* Inline (code-in-code) mode */
 .code-inline-legend {
   display: flex;
   flex-wrap: wrap;

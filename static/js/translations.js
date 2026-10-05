@@ -149,7 +149,7 @@ const TRANSLATIONS = {
     "error.scribbler.no_password": "Ange lösenord för .scribbler-/.nsenc-filen.",
     "scribbler.password.label":    "Lösenord (från Notescribbler)",
     "scribbler.password.ph":       "Exportlösenord",
-    // New features
+    // Code tree, codebook, project search, numbering
     "btn.codetree":              "Kodträd",
     "btn.codebook":              "Kodbok",
     "codebook.empty":            "Kodboken är tom.",
@@ -225,7 +225,7 @@ const TRANSLATIONS = {
     "redo.no.action":         "Inget att göra om.",
     // License
     "license.desc":           "Fri att använda och dela — även i yrkesarbete. Vidaredistribution kräver samma licens.",
-    // New features: weight, anchor, matrix, cooccurrence, waveform, qdpx
+    // Weight, anchor, matrix, co-occurrence, waveform, QDPX
     "settings.use.weight":    "Segmentvikt (0–100)",
     "settings.use.waveform":  "Vågform (ljudfiler)",
     "ann.weight.label":       "Vikt",
@@ -324,7 +324,7 @@ const TRANSLATIONS = {
     "source.panel.image":          "Källbild",
     "source.panel.image.photos":   "Källbild & foton",
     "source.panel.photos":         "Foton",
-    // Color palette
+    // Colour palette
     "palette.more.show":           "Visa fler ▾",
     "palette.more.hide":           "Visa färre ▴",
     "palette.shades":              "Nyanser av förälderns färg",
@@ -397,7 +397,7 @@ const TRANSLATIONS = {
     "backend.start.error.title":   "Transcribbler",
     "backend.start.error.body":    "Kunde inte starta Flask-servern.\nKontrollera att Python och beroenden är installerade.",
     "folder.picker.title":         "Välj projektmapp",
-    // Etiketter byggda i app.js (i18n-genomgång 2026-10-02)
+    // Labels built in app.js
     "topbar.coder.badge": "Kodare: {coder}",
     "progress.uploading": "Laddar upp…",
     "ann.count.one": "{n} kodning",
@@ -579,7 +579,7 @@ const TRANSLATIONS = {
     "error.scribbler.no_password": "Enter the password for the .scribbler/.nsenc file.",
     "scribbler.password.label":    "Password (from Notescribbler)",
     "scribbler.password.ph":       "Export password",
-    // New features
+    // Code tree, codebook, project search, numbering
     "btn.codetree":              "Code tree",
     "btn.codebook":              "Codebook",
     "codebook.empty":            "The codebook is empty.",
@@ -655,7 +655,7 @@ const TRANSLATIONS = {
     "redo.no.action":         "Nothing to redo.",
     // License
     "license.desc":           "Free to use and share — including professional use. Redistribution requires the same licence.",
-    // New features: weight, anchor, matrix, cooccurrence, waveform, qdpx
+    // Weight, anchor, matrix, co-occurrence, waveform, QDPX
     "settings.use.weight":    "Segment weight (0–100)",
     "settings.use.waveform":  "Waveform (audio files)",
     "ann.weight.label":       "Weight",
@@ -755,7 +755,7 @@ const TRANSLATIONS = {
     "source.panel.image":          "Source image",
     "source.panel.image.photos":   "Source image & photos",
     "source.panel.photos":         "Photos",
-    // Color palette
+    // Colour palette
     "palette.more.show":           "Show more ▾",
     "palette.more.hide":           "Show less ▴",
     "palette.shades":              "Shades of parent colour",
@@ -828,7 +828,7 @@ const TRANSLATIONS = {
     "backend.start.error.title":   "Transcribbler",
     "backend.start.error.body":    "Could not start the Flask server.\nMake sure Python and dependencies are installed.",
     "folder.picker.title":         "Choose project folder",
-    // Labels built in app.js (i18n review 2026-10-02)
+    // Labels built in app.js
     "topbar.coder.badge": "Coder: {coder}",
     "progress.uploading": "Uploading…",
     "ann.count.one": "{n} annotation",
@@ -900,15 +900,12 @@ function setLang(lang) {
 function applyTranslations() {
   document.documentElement.lang = currentLang;
 
-  // text content
   document.querySelectorAll("[data-i18n]").forEach(el => {
     el.textContent = t(el.dataset.i18n);
   });
-  // placeholder
   document.querySelectorAll("[data-i18n-ph]").forEach(el => {
     el.placeholder = t(el.dataset.i18nPh);
   });
-  // title attribute
   document.querySelectorAll("[data-i18n-title]").forEach(el => {
     el.title = t(el.dataset.i18nTitle);
   });
@@ -925,14 +922,12 @@ function applyTranslations() {
     try { refreshDynamicLabels(); } catch (_) {}
   }
 
-  // Update both lang toggle buttons (topbar + splash)
   const langLabel = currentLang === "sv" ? "EN" : "SV";
   const btn = document.getElementById("btn-lang");
   if (btn) btn.textContent = langLabel;
   const btnSplash = document.getElementById("btn-lang-splash");
   if (btnSplash) btnSplash.textContent = langLabel;
 
-  // Update theme button label
   const themeBtn = document.getElementById("btn-theme");
   if (themeBtn) {
     const isDark = !document.body.classList.contains("light");

@@ -5,7 +5,6 @@ const net = require('net');
 const http = require('http');
 const fs = require('fs');
 
-// Set app name (shown in macOS menu bar and dock)
 app.setName('Transcribbler');
 
 // Each window gets its own Flask backend; track them as { window, flask, port }.
@@ -302,7 +301,6 @@ ipcMain.on('titlebar-double-click', (event) => {
   }
 });
 
-// IPC: Electron-native folder picker
 ipcMain.handle('pick-folder', async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   const result = await dialog.showOpenDialog(win, {
@@ -312,7 +310,7 @@ ipcMain.handle('pick-folder', async (event) => {
   return result.canceled ? '' : result.filePaths[0];
 });
 
-// IPC: PDF export with explicit filename suggestion
+// IPC: PDF export with a suggested file name
 ipcMain.handle('save-pdf', async (event, defaultName) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   const safeName = String(defaultName || 'analys').replace(/[\\/:*?"<>|]/g, '_').trim() || 'analys';
