@@ -22,7 +22,16 @@ SUPPORTED_AUDIO = {".mp3", ".wav", ".m4a", ".mp4", ".ogg", ".flac", ".webm"}
 # PyTorch 2.6+ compatibility: patch torch.load to use weights_only=False
 # (lightning_fabric/pyannote checkpoint loading requires this)
 # ---------------------------------------------------------------------------
+_TORCH_PATCHED = False
+
+
 def _patch_torch_load():
+    # Called before pyannote/speechbrain are imported, not at start-up: importing
+    # torch takes long enough on a cold Windows start to time out the Electron shell
+    global _TORCH_PATCHED
+    if _TORCH_PATCHED:
+        return
+    _TORCH_PATCHED = True
     try:
         import torch
         import torch.serialization
@@ -49,8 +58,6 @@ def _patch_torch_load():
         torch.serialization.load = _safe_load
     except Exception:
         pass
-
-_patch_torch_load()
 
 # ---------------------------------------------------------------------------
 # Module-level model caches (loaded once, evicted after inactivity)
@@ -425,6 +432,7 @@ def _load_diarization_pipeline(hf_token: str, settings: dict):
     Raises ImportError if pyannote.audio is not installed.
     """
     global _DIAR_PIPELINE, _DIAR_DEVICE
+    _patch_torch_load()
     try:
         from pyannote.audio import Pipeline
     except ImportError:
@@ -511,6 +519,7 @@ def _load_ecapa_model():
     if _ECAPA_MODEL is not None:
         _touch_model_timer()
         return _ECAPA_MODEL
+    _patch_torch_load()
     try:
         from speechbrain.inference.speaker import EncoderClassifier
     except ImportError:

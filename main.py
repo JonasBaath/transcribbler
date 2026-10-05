@@ -28,8 +28,7 @@ from core import merge as merge_mod
 from core.i18n import tr, set_lang
 from core.crypto import read_project_json, read_project_text, write_project_json, write_project_text
 
-# Apply PyTorch 2.6+ compatibility patch for pyannote/lightning_fabric
-import core.transcribe as _tr_mod  # noqa — triggers _patch_torch_load() at import time
+import core.transcribe as _tr_mod
 
 # Root logger: WARNING — quiet by default, real errors and warnings still surface.
 logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -1062,15 +1061,16 @@ def system_info():
         except Exception:
             pass
 
-    # GPU
-    try:
-        import torch
-        if torch.backends.mps.is_available():
-            info["gpu"] = "mps"
-        elif torch.cuda.is_available():
-            info["gpu"] = f"cuda ({torch.cuda.get_device_name(0)})"
-    except Exception:
-        pass
+    # Only relevant for transcription; importing torch is slow on a cold start
+    if whisper_enabled():
+        try:
+            import torch
+            if torch.backends.mps.is_available():
+                info["gpu"] = "mps"
+            elif torch.cuda.is_available():
+                info["gpu"] = f"cuda ({torch.cuda.get_device_name(0)})"
+        except Exception:
+            pass
 
     # Disk free
     try:

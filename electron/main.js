@@ -76,7 +76,8 @@ function startFlask(port) {
   return proc;
 }
 
-function waitForFlask(port, timeout = 60000) {
+// The first start on Windows can be slow while Defender scans the bundled Python
+function waitForFlask(port, timeout = 180000) {
   const start = Date.now();
   return new Promise((resolve, reject) => {
     function check() {
