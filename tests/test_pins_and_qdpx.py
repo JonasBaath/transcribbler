@@ -2,7 +2,6 @@
 import io
 import json
 import zipfile
-from pathlib import Path
 
 import pytest
 
@@ -44,13 +43,6 @@ def test_cooccurrence_ignores_pins_and_other_coders(tmp_path):
     })
     m = compute_cooccurrence(str(tmp_path), proj)["matrix"]
     assert m == {"a": {"c": 1}, "c": {"a": 1}}
-
-
-def test_detect_conflicts_ignores_pins(tmp_path):
-    from core.merge import detect_conflicts
-    _project(tmp_path, {"anna": [_text("0000bb01", "a", 0, 10), PIN],
-                        "bo": [_text("0000bb02", "b", 0, 10), dict(PIN, id="0000aa02")]})
-    assert len(detect_conflicts(str(tmp_path), TID)) == 1
 
 
 def test_markdown_transcript_export_with_pin(tmp_path):

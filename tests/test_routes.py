@@ -1,7 +1,5 @@
 """Tests for Flask routes — path traversal and basic route behaviour."""
-import json
 import uuid
-import pytest
 
 
 # ---------------------------------------------------------------------------
@@ -157,39 +155,6 @@ class TestTextPatchTraversal:
 
 
 # ---------------------------------------------------------------------------
-# /api/merge — path traversal (already fixed, regression test)
-# ---------------------------------------------------------------------------
-
-class TestMergeTraversal:
-    def test_nonexistent_file_rejected(self, flask_client):
-        r = flask_client.post(
-            "/api/merge",
-            json={"path": "/nonexistent/path/file.json"},
-            content_type="application/json",
-        )
-        assert r.status_code == 400
-
-    def test_non_json_suffix_rejected(self, flask_client, tmp_project):
-        tmp_path, _ = tmp_project
-        evil = tmp_path / "evil.txt"
-        evil.write_text("{}", encoding="utf-8")
-        r = flask_client.post(
-            "/api/merge",
-            json={"path": str(evil)},
-            content_type="application/json",
-        )
-        assert r.status_code == 400
-
-    def test_empty_path_rejected(self, flask_client):
-        r = flask_client.post(
-            "/api/merge",
-            json={"path": ""},
-            content_type="application/json",
-        )
-        assert r.status_code == 400
-
-
-# ---------------------------------------------------------------------------
 # /api/transcripts/<tid>/segments — tid cannot contain slashes (Flask routing)
 # ---------------------------------------------------------------------------
 
@@ -325,15 +290,6 @@ class TestWhisperFlag:
         assert "inte tillgänglig" in r.get_json()["error"]
         assert len(main.JOBS) == n_jobs  # no background job started
 
-    def test_legacy_path_route_refused_when_disabled(self, flask_client, tmp_path, monkeypatch):
-        import main
-        monkeypatch.delenv("TRANSCRIBBLER_ENABLE_WHISPER", raising=False)
-        monkeypatch.setattr(main, "_load_config", lambda: {})
-        audio = tmp_path / "x.wav"
-        audio.write_bytes(b"RIFF" + b"\x00" * 100)
-        r = flask_client.post("/api/transcripts", json={"path": str(audio)})
-        assert r.status_code == 400
-
     def test_text_upload_still_works(self, flask_client, monkeypatch):
         import io, main
         monkeypatch.delenv("TRANSCRIBBLER_ENABLE_WHISPER", raising=False)
@@ -432,7 +388,6 @@ class TestRoutesPassKey:
         monkeypatch.setattr(core.annotation, "load_all_coders",
                             lambda folder, tid, key=None: seen.append(key) or {})
         assert flask_client.get("/api/codes/anchors").status_code == 200
-        assert flask_client.get("/api/codes/c1/anchor").status_code == 200
         assert seen and all(k == self.KEY for k in seen)
 
     def test_commit_transcript_does_not_crash(self, flask_client, monkeypatch, tmp_path):

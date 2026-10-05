@@ -1221,50 +1221,6 @@ def extract_voice_profile():
             pass
 
 
-@app.route("/api/transcripts", methods=["POST"])
-def add_transcript():
-    """Legacy: accept a local file path (kept for scripting use)."""
-    err = _require_project()
-    if err:
-        return err
-    data = request.json
-    src = data.get("path", "").strip()
-    name = data.get("name", "").strip()
-    if not src:
-        return jsonify({"error": tr("path krävs.")}), 400
-
-    src_path = Path(src).resolve()
-    if not src_path.is_file():
-        return jsonify({"error": tr("Filen hittades inte.")}), 400
-
-    from core.transcribe import is_audio, transcribe_to_file
-    import tempfile
-
-    if is_audio(str(src_path)):
-        if not whisper_enabled():
-            return jsonify({"error": tr(WHISPER_DISABLED_MSG)}), 400
-        model_size = data.get("model", "medium")
-        language = data.get("language", "sv")
-        tmp = tempfile.NamedTemporaryFile(suffix=".txt", delete=False)
-        tmp.close()
-        try:
-            transcribe_to_file(str(src_path), tmp.name, language=language, model_size=model_size)
-            src_path = Path(tmp.name)
-            if not name:
-                name = Path(data["path"]).stem
-        except Exception:
-            logger.exception("Legacy transcription failed: %s", src_path)
-            return jsonify({"error": tr("Transkription misslyckades.")}), 500
-
-    try:
-        updated = proj_mod.add_transcript(STATE["folder"], STATE["project"], str(src_path), name, key=_key())
-        STATE["project"] = updated
-        return jsonify({"ok": True, "project": updated})
-    except Exception:
-        logger.exception("Legacy add_transcript failed: %s", src_path)
-        return jsonify({"error": tr("Kunde inte lägga till transkript.")}), 500
-
-
 @app.route("/api/transcripts/<tid>/text", methods=["GET"])
 def get_transcript_text(tid):
     err = _require_project()
@@ -1856,15 +1812,6 @@ def get_annotations(tid):
     return jsonify({"annotations": anns})
 
 
-@app.route("/api/transcripts/<tid>/annotations/all", methods=["GET"])
-def get_all_annotations(tid):
-    err = _require_project()
-    if err:
-        return err
-    all_coders = ann_mod.load_all_coders(STATE["folder"], tid, key=_key())
-    return jsonify({"by_coder": all_coders})
-
-
 @app.route("/api/transcripts/<tid>/annotations", methods=["POST"])
 def add_annotation(tid):
     err = _require_project()
@@ -1939,30 +1886,6 @@ def _import_codings(data: dict):
     return jsonify({"ok": True, "project": updated, **report})
 
 
-@app.route("/api/merge", methods=["POST"])
-def merge():
-    """Legacy: import a codings file by local path."""
-    err = _require_project()
-    if err:
-        return err
-    data = request.json or {}
-    src = data.get("path", "").strip()
-    if not src:
-        return jsonify({"error": tr("path krävs.")}), 400
-    src_path = Path(src).resolve()
-    if not src_path.is_file():
-        return jsonify({"error": tr("Filen hittades inte.")}), 400
-    if src_path.suffix.lower() != ".json":
-        return jsonify({"error": tr("Filen måste vara en JSON-fil (.json).")}), 400
-    try:
-        return _import_codings(merge_mod.read_codings_file(str(src_path), key=_key()))
-    except ValueError as e:
-        return jsonify({"error": tr(str(e))}), 400
-    except Exception:
-        logger.exception("Merge failed: %s", src_path)
-        return jsonify({"error": tr("Importen misslyckades.")}), 500
-
-
 @app.route("/api/codings/import", methods=["POST"])
 def import_codings_upload():
     """Import a codings file chosen in the file picker (multipart 'file')."""
@@ -2005,15 +1928,6 @@ def export_codings():
                     headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
-@app.route("/api/transcripts/<tid>/conflicts", methods=["GET"])
-def get_conflicts(tid):
-    err = _require_project()
-    if err:
-        return err
-    conflicts = merge_mod.detect_conflicts(STATE["folder"], tid, key=_key())
-    return jsonify({"conflicts": conflicts})
-
-
 # ---------------------------------------------------------------------------
 # Export routes
 # ---------------------------------------------------------------------------
@@ -2039,41 +1953,6 @@ def _export_filename(stem: str, ext: str) -> str:
         parts.append(safe)
     parts.append(dt_str)
     return "_".join(parts) + "." + ext
-
-
-@app.route("/api/export/csv/tidy", methods=["GET"])
-def export_csv_tidy():
-    err = _require_project()
-    if err:
-        return err
-    tid = request.args.get("tid") or None
-    csv_data = exp_mod.export_csv_tidy(STATE["folder"], STATE["project"], tid, key=_key())
-    fname = _export_filename("annoteringar_tidy", "csv")
-    return app.response_class(csv_data, mimetype="text/csv",
-                              headers={"Content-Disposition": f'attachment; filename="{fname}"'})
-
-
-@app.route("/api/export/csv", methods=["GET"])
-def export_csv():
-    err = _require_project()
-    if err:
-        return err
-    tid = request.args.get("tid") or None
-    csv_data = exp_mod.export_csv(STATE["folder"], STATE["project"], tid, key=_key())
-    fname = _export_filename("annoteringar", "csv")
-    return app.response_class(csv_data, mimetype="text/csv",
-                              headers={"Content-Disposition": f'attachment; filename="{fname}"'})
-
-
-@app.route("/api/export/markdown/codes", methods=["GET"])
-def export_md_codes():
-    err = _require_project()
-    if err:
-        return err
-    tid = request.args.get("tid") or None
-    md = exp_mod.export_markdown_by_code(STATE["folder"], STATE["project"], tid, key=_key())
-    return app.response_class(md, mimetype="text/markdown",
-                              headers={"Content-Disposition": f'attachment; filename="{_export_filename("citat_per_kod", "md")}"'})
 
 
 @app.route("/api/export/markdown/codebook", methods=["GET"])
@@ -2122,17 +2001,6 @@ def export_codebook_csv():
         mimetype="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{_export_filename("kodbok", "csv")}"'},
     )
-
-
-@app.route("/api/export/markdown/transcript/<tid>", methods=["GET"])
-def export_md_transcript(tid):
-    err = _require_project()
-    if err:
-        return err
-    coder = request.args.get("coder", STATE["coder"])
-    md = exp_mod.export_markdown_transcript(STATE["folder"], STATE["project"], tid, coder, key=_key())
-    return app.response_class(md, mimetype="text/markdown",
-                              headers={"Content-Disposition": f'attachment; filename="{_export_filename(tr("transkript") + "_" + tid, "md")}"'})
 
 
 # ---------------------------------------------------------------------------
@@ -2213,39 +2081,9 @@ def export_cooccurrence_csv():
 # QDPX export route (REFI-QDA standard)
 # ---------------------------------------------------------------------------
 
-@app.route("/api/export/qdpx", methods=["GET"])
-def export_qdpx():
-    err = _require_project()
-    if err:
-        return err
-    from core.qdpx import export_qdpx as _export_qdpx
-    zip_bytes = _export_qdpx(STATE["folder"], STATE["project"], key=_key())
-    return app.response_class(
-        zip_bytes,
-        mimetype="application/zip",
-        headers={"Content-Disposition": f'attachment; filename="{_export_filename("projekt", "qdpx")}"'},
-    )
-
-
 # ---------------------------------------------------------------------------
 # Anchor quote route — get the anchor annotation for a code
 # ---------------------------------------------------------------------------
-
-@app.route("/api/codes/<code_id>/anchor", methods=["GET"])
-def get_anchor_quote(code_id):
-    err = _require_project()
-    if err:
-        return err
-    from core.annotation import load_all_coders as _load_all
-    for t in STATE["project"].get("transcripts", []):
-        all_coders = _load_all(STATE["folder"], t["id"], key=_key())
-        for coder_anns in all_coders.values():
-            for ann in coder_anns:
-                if ann.get("code_id") == code_id and ann.get("anchor"):
-                    return jsonify({"ok": True, "annotation": ann,
-                                    "transcript": t.get("name", t["id"])})
-    return jsonify({"ok": True, "annotation": None})
-
 
 @app.route("/api/codes/anchors", methods=["GET"])
 def get_all_anchors():

@@ -233,6 +233,15 @@ class TestT2_UpdateMemoAnchor:
         assert reloaded[-1]["code_id"] == c2["id"]
 
 
+def _export_one(client, folder, fmt):
+    """Export one format via the export-to-folder route and return the file bytes."""
+    r = client.post("/api/export/to-folder", json={"folder": str(folder), "formats": [fmt]},
+                    content_type="application/json")
+    data = r.get_json()
+    assert r.status_code == 200 and data["errors"] == [] and len(data["written"]) == 1
+    return (folder / data["written"][0]).read_bytes()
+
+
 # ===========================================================================
 # T3 — Export utan kodval (all export types without tid filter)
 # ===========================================================================
@@ -252,20 +261,17 @@ class TestT3_ExportWithoutCodeSelection:
             c = _add_code(flask_client, "ExportKod")
             _add_annotation(flask_client, t["id"], c["id"], 0, 10, text[0:10])
 
-    def test_step1_csv_export(self, flask_client):
-        r = flask_client.get("/api/export/csv")
-        assert r.status_code == 200
-        assert b"transcript" in r.data  # header row
+    def test_step1_csv_export(self, flask_client, tmp_path):
+        data = _export_one(flask_client, tmp_path, "csv")
+        assert b"transcript" in data
 
-    def test_step2_csv_tidy_export(self, flask_client):
-        r = flask_client.get("/api/export/csv/tidy")
-        assert r.status_code == 200
-        assert b"project" in r.data
+    def test_step2_csv_tidy_export(self, flask_client, tmp_path):
+        data = _export_one(flask_client, tmp_path, "csv_tidy")
+        assert b"project" in data
 
-    def test_step3_markdown_codes_export(self, flask_client):
-        r = flask_client.get("/api/export/markdown/codes")
-        assert r.status_code == 200
-        assert len(r.data) > 0
+    def test_step3_markdown_codes_export(self, flask_client, tmp_path):
+        data = _export_one(flask_client, tmp_path, "md_codes")
+        assert len(data) > 0
 
     def test_step4_markdown_codebook_export(self, flask_client):
         r = flask_client.get("/api/export/markdown/codebook")
@@ -286,11 +292,9 @@ class TestT3_ExportWithoutCodeSelection:
         assert r.status_code == 200
         assert len(r.data) > 0
 
-    def test_step8_qdpx_export(self, flask_client):
-        r = flask_client.get("/api/export/qdpx")
-        assert r.status_code == 200
-        # QDPX is a zip file — should start with PK
-        assert r.data[:2] == b"PK"
+    def test_step8_qdpx_export(self, flask_client, tmp_path):
+        data = _export_one(flask_client, tmp_path, "qdpx")
+        assert data[:2] == b"PK"  # zip
 
 
 # ===========================================================================
@@ -556,96 +560,6 @@ class TestT7_MergeCodes:
 
 
 # ===========================================================================
-# T8 — Regressionstest att projektmerge fortfarande fungerar
-# ===========================================================================
-
-class TestT8_ProjectMerge:
-    """
-    /api/merge imports external annotation files correctly.
-    """
-
-    def test_step1_import_valid_annotation_file(self, flask_client, tmp_path):
-        """Import an external coder's annotation JSON file."""
-        text = "Mergetext"
-        t = _add_transcript(flask_client, text_content=text)
-        import main
-        # Ensure annotations dir exists
-        ann_dir = os.path.join(main.STATE["folder"], "annotations")
-        os.makedirs(ann_dir, exist_ok=True)
-
-        c = _add_code(flask_client, "MergeKod")
-
-        # Create external annotation file
-        ext_file = tmp_path / "extern.json"
-        ext_file.write_text(json.dumps({
-            "transcript_id": t["id"],
-            "coder": "extern_kodare",
-            "annotations": [{
-                "id": "ext001",
-                "code_id": c["id"],
-                "kind": "text",
-                "start": 0,
-                "end": 5,
-                "text": "Merge",
-                "memo": "",
-                "weight": 50,
-                "anchor": False,
-                "created": "2024-01-01T00:00:00",
-            }],
-        }), encoding="utf-8")
-
-        r = flask_client.post("/api/merge",
-                              json={"path": str(ext_file)},
-                              content_type="application/json")
-        assert r.status_code == 200
-        data = r.get_json()
-        assert data["ok"] is True
-        assert data["imported"] == 1
-        assert data["coder"] == "extern_kodare"
-
-    def test_step2_imported_annotations_visible(self, flask_client):
-        """Imported annotations are visible via the all-coders endpoint."""
-        import main
-        tid = main.STATE["project"]["transcripts"][-1]["id"]
-        r = flask_client.get(f"/api/transcripts/{tid}/annotations/all")
-        by_coder = r.get_json()["by_coder"]
-        assert "extern_kodare" in by_coder
-        assert len(by_coder["extern_kodare"]) == 1
-
-    def test_step3_reimport_skips_duplicates(self, flask_client, tmp_path):
-        """Re-importing the same file skips already existing annotations."""
-        import main
-        tid = main.STATE["project"]["transcripts"][-1]["id"]
-        c = next(c for c in main.STATE["project"]["codes"] if c["name"] == "MergeKod")
-
-        ext_file = tmp_path / "extern2.json"
-        ext_file.write_text(json.dumps({
-            "transcript_id": tid,
-            "coder": "extern_kodare",
-            "annotations": [{
-                "id": "ext001",  # same ID as before
-                "code_id": c["id"],
-                "kind": "text",
-                "start": 0,
-                "end": 5,
-                "text": "Merge",
-                "memo": "",
-                "weight": 50,
-                "anchor": False,
-                "created": "2024-01-01T00:00:00",
-            }],
-        }), encoding="utf-8")
-
-        r = flask_client.post("/api/merge",
-                              json={"path": str(ext_file)},
-                              content_type="application/json")
-        assert r.status_code == 200
-        data = r.get_json()
-        assert data["imported"] == 0
-        assert data["skipped"] == 1
-
-
-# ===========================================================================
 # T4 — Avbryt vid projektbyte (state reset) — SIST, ändrar STATE
 # ===========================================================================
 
@@ -668,7 +582,6 @@ class TestT4_ProjectSwitchReset:
 
     def test_step2_open_new_project_resets_state(self, flask_client, tmp_path):
         """Opening a different project resets codes and transcripts."""
-        import main
         new_folder = str(tmp_path / "new_project")
         os.makedirs(os.path.join(new_folder, "transcripts"), exist_ok=True)
         os.makedirs(os.path.join(new_folder, "annotations"), exist_ok=True)

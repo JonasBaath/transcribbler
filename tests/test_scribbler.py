@@ -1,7 +1,7 @@
 """Tests for core/scribbler.py — .scribbler decrypt."""
 import os
 import pytest
-from core.scribbler import decrypt_scribbler, MAGIC, SALT_OFFSET, SALT_LEN, NONCE_OFFSET, NONCE_LEN, DATA_OFFSET
+from core.scribbler import decrypt_scribbler, MAGIC, SALT_LEN, NONCE_LEN, DATA_OFFSET
 
 
 PASSWORD = "korrekt-lösenord"

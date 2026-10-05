@@ -1,6 +1,4 @@
 """Tests for core/project.py — text extraction and frontmatter parsing."""
-import pytest
-from pathlib import Path
 from core.project import _extract_text, _parse_md_frontmatter
 
 
