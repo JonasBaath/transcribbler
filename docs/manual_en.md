@@ -347,7 +347,7 @@ Calculation of Cohen's kappa between two coders per transcript is implemented, b
 
 Click **Export** in the top bar. Choose a **Destination folder**, the **Scope** and one or more formats.
 
-The **Scope** applies to the CSV formats and Markdown per code:
+The **Scope** applies to the CSV formats, Markdown per code and coded transcripts:
 
 - **Whole project** (default)
 - **Open transcript only** (only available when a transcript is open)
@@ -358,10 +358,10 @@ The **Scope** applies to the CSV formats and Markdown per code:
 | CSV tidy (R/Python) | One row per annotation, suited to R and Python |
 | Markdown – excerpts per code | Coded excerpts grouped by code |
 | Markdown – codebook | Codebook structure with annotation counts (always the whole project) |
-| Markdown – this transcript | The open transcript with your annotations marked |
+| Markdown – coded transcripts | Every transcript that has annotations, in one file: the full text with codes marked (overlaps included) and a summary with memos. Suited to reviewing the coding |
 | QDPX (REFI-QDA) | Exchange format for other QDA software (always the whole project) |
 
-If a format cannot be created (for example, **Markdown – this transcript** when no transcript is open), the other formats are still written and the dialogue shows what failed.
+If a format cannot be created, the other formats are still written and the dialogue shows what failed.
 
 Files are named with the project name, date and time. File names and headings follow the selected language.
 

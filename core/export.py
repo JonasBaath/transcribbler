@@ -208,37 +208,73 @@ def export_markdown_codebook(project: dict, counts: dict | None = None) -> str:
     return "\n".join(lines)
 
 
-def export_markdown_transcript(folder: str, project: dict, tid: str, coder: str, *, key: bytes | None = None) -> str:
-    """Export a transcript with inline code annotations."""
-    from .annotation import load_annotations
-    t = next((t for t in project["transcripts"] if t["id"] == tid), None)
-    if not t:
-        return tr("_Transkript hittades inte._") + "\n"
-
-    text = get_transcript_text(folder, t, key=key)
-    anns = load_annotations(folder, tid, coder, key=key)
-    anns_sorted = sorted(filter(is_text_annotation, anns), key=lambda a: a["start"])
-
-    lines = [f"# {t['name']}\n", f"_{tr('Kodare: {coder}', coder=coder)}_\n\n---\n"]
-    cursor = 0
-    for ann in anns_sorted:
-        s, e = ann["start"], ann["end"]
-        if s < cursor:
+def export_markdown_transcripts(folder: str, project: dict, tid: str | None = None, *,
+                                key: bytes | None = None) -> str:
+    """Coded transcripts with codes marked inline: one transcript, or every coded one."""
+    from datetime import date
+    from .annotation import load_all_coders
+    chosen = [t for t in project.get("transcripts", []) if tid is None or t["id"] == tid]
+    sections, all_coders = [], set()
+    for t in chosen:
+        by_coder = load_all_coders(folder, t["id"], key=key)
+        anns = [{**a, "coder": c} for c, lst in by_coder.items() for a in lst if is_text_annotation(a)]
+        if not anns:
             continue
-        lines.append(text[cursor:s])
-        code = get_code(project, ann["code_id"])
-        code_name = code["name"] if code else ann["code_id"]
-        lines.append(f"**[{code_name}]** *{text[s:e]}*")
-        cursor = e
-    lines.append(text[cursor:])
-    lines.append(f"\n\n---\n\n## {tr('Kodsammanfattning')}\n")
-    for ann in anns_sorted:
-        code = get_code(project, ann["code_id"])
-        code_name = code["name"] if code else ann["code_id"]
-        lines.append(f"- **{code_name}**: {ann['text'][:80]}{'…' if len(ann['text']) > 80 else ''}")
-        if ann.get("memo"):
-            lines.append(f"  - _Memo: {ann['memo']}_")
-    return "\n".join(lines)
+        coders = sorted({a["coder"] for a in anns})
+        all_coders.update(coders)
+        sections.append(_transcript_section(project, t, get_transcript_text(folder, t, key=key),
+                                            anns, show_coder=len(coders) > 1))
+    head = [f"# {tr('{name} — Kodade transkript', name=project.get('name', ''))}\n",
+            f"_{tr('Exporterad {date}', date=date.today().isoformat())}"
+            + (f" · {tr('Kodare: {coder}', coder=', '.join(sorted(all_coders)))}" if all_coders else "")
+            + "_\n"]
+    if not sections:
+        head.append(tr("_Inga kodningar hittades._") + "\n")
+    return "\n".join(head + sections)
+
+
+def _italic(line: str) -> str:
+    # Italics cannot span line breaks or start/end with a space, so keep spaces outside
+    core = line.strip()
+    if not core:
+        return line
+    lead = line[:len(line) - len(line.lstrip())]
+    trail = line[len(line.rstrip()):]
+    return f"{lead}*{core}*{trail}"
+
+
+def _transcript_section(project: dict, t: dict, text: str, anns: list, show_coder: bool) -> str:
+    def label(a):
+        code = get_code(project, a["code_id"])
+        name = code["name"] if code else tr("[borttagen: {id}]", id=a["code_id"])
+        return f"{name} · {a['coder']}" if show_coder else name
+
+    anns = sorted(anns, key=lambda a: (a["start"], -a["end"]))
+    n = len(text)
+    cuts = sorted({0, n} | {max(0, min(n, a[k])) for a in anns for k in ("start", "end")})
+    body = []
+    for s, e in zip(cuts, cuts[1:]):
+        piece = text[s:e]
+        active = [a for a in anns if a["start"] <= s and a["end"] >= e]
+        if not active:
+            body.append(piece)
+            continue
+        labels = list(dict.fromkeys(label(a) for a in active))
+        # Markdown only renders "**[" as bold after whitespace, so split mid-word codings
+        sep = " " if body and body[-1][-1:] not in ("", " ", "\n") else ""
+        body.append(f"{sep}**[{', '.join(labels)}]** " + "\n".join(_italic(ln) for ln in piece.split("\n")))
+
+    out = ["\n---\n", f"## {t.get('name', t['id'])}\n",
+           # Hard line breaks keep each turn on its own line (Markdown joins single newlines)
+           f"_{tr('{n} kodningar', n=len(anns))}_\n", "".join(body).replace("\n", "  \n"),
+           f"\n### {tr('Kodsammanfattning')}\n"]
+    for a in anns:
+        excerpt = a.get("text") or text[a["start"]:a["end"]]
+        key_mark = f" ({tr('nyckelpassage')})" if a.get("anchor") else ""
+        out.append(f"- **{label(a)}**{key_mark}: {excerpt[:120]}{'…' if len(excerpt) > 120 else ''}")
+        if a.get("memo"):
+            out.append(f"  - _Memo: {a['memo']}_")
+    return "\n".join(out) + "\n"
 
 
 # ---------------------------------------------------------------------------

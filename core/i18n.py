@@ -120,7 +120,6 @@ EN: dict[str, str] = {
     # --- Export ------------------------------------------------------------
     "Ingen mapp angiven.": "No folder specified.",
     "Kunde inte skapa exportmappen.": "Could not create the export folder.",
-    "Inget transkript öppet för detta exportformat.": "No transcript is open for this export format.",
     # Document content
     "Analys — {name}": "Analysis — {name}",
     "kodare: {coder}": "coder: {coder}",
@@ -132,6 +131,10 @@ EN: dict[str, str] = {
     "_Kodboken är tom._": "_The codebook is empty._",
     "_Transkript hittades inte._": "_Transcript not found._",
     "Kodsammanfattning": "Code summary",
+    "{name} — Kodade transkript": "{name} — Coded transcripts",
+    "Exporterad {date}": "Exported {date}",
+    "{n} kodningar": "{n} annotations",
+    "nyckelpassage": "key passage",
     "Transkript": "Transcript",
     "TOTALT": "TOTAL",
     # File name stems (ASCII only)
@@ -141,6 +144,7 @@ EN: dict[str, str] = {
     "kodbok": "codebook",
     "kodtrad": "code_tree",
     "transkript": "transcript",
+    "kodade_transkript": "coded_transcripts",
     "kodmatris": "code_matrix",
     "kodoverlapp": "code_overlap",
     "projekt": "project",

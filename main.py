@@ -2074,8 +2074,7 @@ def export_to_folder():
     data = request.json or {}
     dest_str = (data.get("folder") or "").strip()
     formats = data.get("formats") or []
-    tid = data.get("tid") or None  # None = whole project (CSV / MD per code)
-    current_tid = data.get("current_tid") or tid  # for "this transcript"
+    tid = data.get("tid") or None  # None = whole project
 
     if not dest_str:
         return jsonify({"error": tr("Ingen mapp angiven.")}), 400
@@ -2094,17 +2093,14 @@ def export_to_folder():
         ("csv", "annoteringar", "csv", lambda: exp_mod.export_csv(folder, project, tid, key=key)),
         ("md_codes", "citat_per_kod", "md", lambda: exp_mod.export_markdown_by_code(folder, project, tid, key=key)),
         ("md_codebook", "kodbok", "md", lambda: exp_mod.export_markdown_codebook(project, _code_counts())),
-        ("md_transcript", f"{tr('transkript')}_{current_tid}", "md",
-         lambda: exp_mod.export_markdown_transcript(folder, project, current_tid, STATE["coder"], key=key)),
+        ("md_transcript", f"{tr('transkript')}_{tid}" if tid else "kodade_transkript", "md",
+         lambda: exp_mod.export_markdown_transcripts(folder, project, tid, key=key)),
         ("qdpx", "projekt", "qdpx", lambda: export_qdpx(folder, project, key=key)),
     ]
     written = []
     errors = []
     for fmt, stem, ext, build in exporters:
         if fmt not in formats:
-            continue
-        if fmt == "md_transcript" and not current_tid:
-            errors.append(tr("Inget transkript öppet för detta exportformat."))
             continue
         try:
             fname = _export_filename(stem, ext)

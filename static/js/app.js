@@ -2851,8 +2851,7 @@ document.getElementById("btn-export-confirm").addEventListener("click", async ()
   const scope = document.querySelector('input[name="export-scope"]:checked')?.value || "project";
   const res = await POST("/api/export/to-folder", {
     folder, formats,
-    tid: scope === "transcript" ? currentTid : null,  // filter for CSV / MD per code
-    current_tid: currentTid,                          // for "this transcript"
+    tid: scope === "transcript" ? currentTid : null,
   });
   btn.disabled = false;
   if (res.ok) {

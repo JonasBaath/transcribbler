@@ -453,15 +453,13 @@ class TestBackendLanguage:
 # ---------------------------------------------------------------------------
 
 class TestExportToFolder:
-    def test_md_transcript_without_open_transcript_does_not_abort(self, flask_client, tmp_path):
+    def test_coded_transcripts_whole_project(self, flask_client, tmp_path):
         r = flask_client.post("/api/export/to-folder", json={
-            "folder": str(tmp_path / "ut"), "formats": ["md_codebook", "md_transcript"],
-            "tid": None, "current_tid": None,
+            "folder": str(tmp_path / "ut"), "formats": ["md_codebook", "md_transcript"], "tid": None,
         }, content_type="application/json")
         data = r.get_json()
-        assert r.status_code == 200 and data["ok"]
-        assert len(data["written"]) == 1          # the codebook was still written
-        assert len(data["errors"]) == 1           # "this transcript" reported, not fatal
+        assert r.status_code == 200 and data["errors"] == []
+        assert any(f.startswith("kodade_transkript_") for f in data["written"])
 
     def test_whole_project_scope_passes_no_tid(self, flask_client, tmp_path, monkeypatch):
         import main
@@ -472,7 +470,7 @@ class TestExportToFolder:
         monkeypatch.setattr(main.exp_mod, "export_csv", fake)
         flask_client.post("/api/export/to-folder", json={
             "folder": str(tmp_path / "ut2"), "formats": ["csv"],
-            "tid": None, "current_tid": "abcd1234",
+            "tid": None,
         }, content_type="application/json")
         assert seen["tid"] is None
 

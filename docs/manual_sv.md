@@ -347,7 +347,7 @@ Beräkning av Cohens kappa mellan två kodare per transkript finns i programmet,
 
 Klicka **Exportera** i toppfältet. Välj **Destinationsmapp**, **Omfattning** och ett eller flera format.
 
-**Omfattning** gäller CSV-formaten och Markdown per kod:
+**Omfattning** gäller CSV-formaten, Markdown per kod och kodade transkript:
 
 - **Hela projektet** (standard)
 - **Bara öppet transkript** (kan bara väljas när ett transkript är öppet)
@@ -358,10 +358,10 @@ Klicka **Exportera** i toppfältet. Välj **Destinationsmapp**, **Omfattning** o
 | CSV tidy (R/Python) | En rad per kodning, anpassat för R och Python |
 | Markdown – utdrag per kod | Kodade utdrag grupperade per kod |
 | Markdown – kodbok | Kodbokens struktur med antal kodningar (alltid hela projektet) |
-| Markdown – detta transkript | Det öppna transkriptet med dina kodningar markerade |
+| Markdown – kodade transkript | Alla transkript som har kodningar, i en fil: hela texten med koderna markerade (även överlappande) och en sammanfattning med memon. Lämpligt för att granska kodningen |
 | QDPX (REFI-QDA) | Utbytesformat för andra QDA-program (alltid hela projektet) |
 
-Om något format inte kan skapas (till exempel **Markdown – detta transkript** när inget transkript är öppet) skrivs övriga format ändå, och dialogen visar vad som misslyckades.
+Om något format inte kan skapas skrivs övriga format ändå, och dialogen visar vad som misslyckades.
 
 Filerna namnges med projektnamn, datum och tid. Filnamn och rubriker följer det valda språket.
 

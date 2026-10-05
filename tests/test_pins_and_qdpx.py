@@ -46,9 +46,9 @@ def test_cooccurrence_ignores_pins_and_other_coders(tmp_path):
 
 
 def test_markdown_transcript_export_with_pin(tmp_path):
-    from core.export import export_markdown_transcript
+    from core.export import export_markdown_transcripts
     proj = _project(tmp_path, {"anna": [_text("0000bb01", "a", 0, 3), PIN]})
-    md = export_markdown_transcript(str(tmp_path), proj, TID, "anna")
+    md = export_markdown_transcripts(str(tmp_path), proj, TID)
     assert "**[A]** *Hej*" in md
 
 
@@ -82,3 +82,46 @@ def test_irr_no_codings_is_an_error(tmp_path):
     proj = _project(tmp_path, {"anna": [], "bo": []})
     with pytest.raises(ValueError):
         cohens_kappa(str(tmp_path), proj, TID, "anna", "bo")
+
+
+def test_coded_transcripts_overlap_and_coders(tmp_path):
+    from core.export import export_markdown_transcripts
+    proj = _project(tmp_path, {
+        "anna": [_text("0000bb01", "a", 0, 10), _text("0000bb02", "b", 5, 15)],
+        "bo":   [_text("0000bb03", "c", 0, 3)],
+    })
+    md = export_markdown_transcripts(str(tmp_path), proj)
+    # Overlap: the shared range carries both codes; with two coders, names are shown
+    assert f"**[A · anna, B · anna]** *{TEXT[5:10].strip()}*" in md
+    assert "C · bo" in md
+    assert "4 kodningar" not in md and "3 kodningar" in md
+
+
+def test_coded_transcripts_skip_uncoded_and_single_coder_has_no_name(tmp_path):
+    from core.export import export_markdown_transcripts
+    proj = _project(tmp_path, {"anna": [_text("0000bb01", "a", 0, 3)]})
+    proj["transcripts"].append({"id": "ffff0000", "name": "Okodad", "text_file": "ffff0000.txt"})
+    (tmp_path / "transcripts" / "ffff0000.txt").write_text("Ingen kodning här", encoding="utf-8")
+    md = export_markdown_transcripts(str(tmp_path), proj)
+    assert "## Intervju" in md and "Okodad" not in md
+    assert "**[A]**" in md and "· anna" not in md
+
+
+def test_coded_transcripts_italics_do_not_span_lines(tmp_path):
+    from core.export import _transcript_section
+    t = {"id": "x", "name": "X"}
+    ann = {"id": "1", "code_id": "a", "coder": "anna", "start": 0, "end": 9, "text": "rad1\nrad2"}
+    md = _transcript_section({"codes": [{"id": "a", "name": "A"}]}, t, "rad1\nrad2 slut", [ann], False)
+    assert "**[A]** *rad1*  \n*rad2*" in md
+
+
+def test_coded_transcripts_keep_spaces_and_split_mid_word(tmp_path):
+    from core.export import _transcript_section
+    t = {"id": "x", "name": "X"}
+    codes = {"codes": [{"id": "a", "name": "A"}]}
+    ann = {"id": "1", "code_id": "a", "coder": "anna", "start": 3, "end": 8, "text": " och "}
+    md = _transcript_section(codes, t, "Hej och hej", [ann], False)
+    assert "Hej**[A]**  *och* hej" not in md and "Hej **[A]**  *och* hej" in md
+    mid = {"id": "2", "code_id": "a", "coder": "anna", "start": 1, "end": 3, "text": "ej"}
+    md = _transcript_section(codes, t, "Hej då", [mid], False)
+    assert "H **[A]** *ej* då" in md
