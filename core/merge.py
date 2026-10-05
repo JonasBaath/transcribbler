@@ -15,10 +15,10 @@ auto-resolved.
 from __future__ import annotations
 
 import hashlib
-import json
 from datetime import datetime
 from pathlib import Path
 
+from .crypto import read_project_json
 from .annotation import load_annotations, save_annotations, is_valid_coder_name
 from .codebook import add_code
 from .i18n import tr
@@ -67,13 +67,7 @@ def export_coder_bundle(folder: str, project: dict, coder: str, *,
 def read_codings_file(path: str, *, key: bytes | None = None) -> dict:
     """Load a bundle or a legacy annotation file (decrypting it with the
     project key if it comes from this encrypted project)."""
-    src = Path(path)
-    if key:
-        from .crypto import is_encrypted_file, decrypt_json_file
-        if is_encrypted_file(src):
-            return decrypt_json_file(src, key)
-    with open(src, encoding="utf-8") as f:
-        return json.load(f)
+    return read_project_json(Path(path), key)
 
 
 def _as_bundle(data: dict) -> dict:

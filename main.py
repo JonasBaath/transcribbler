@@ -25,6 +25,7 @@ from core import annotation as ann_mod
 from core import export as exp_mod
 from core import merge as merge_mod
 from core.i18n import tr, set_lang
+from core.crypto import read_project_json, read_project_text, write_project_json, write_project_text
 
 # Apply PyTorch 2.6+ compatibility patch for pyannote/lightning_fabric
 import core.transcribe as _tr_mod  # noqa — triggers _patch_torch_load() at import time
@@ -555,11 +556,7 @@ def _ocr_job(job_id: str, image_path: str, folder: str, project: dict, name: str
 
         # Spara OCR-rutor innan locken (ingen conflict-risk här)
         boxes_path = Path(folder) / "transcripts" / f"{tid}_ocr_boxes.json"
-        if enc_key:
-            from core.crypto import encrypt_json_file
-            encrypt_json_file(boxes_path, boxes, enc_key)
-        else:
-            boxes_path.write_text(json.dumps(boxes, ensure_ascii=False), encoding="utf-8")
+        write_project_json(boxes_path, boxes, enc_key)
 
         # Läs om project från disk under lock för att undvika race condition
         # när flera bilder importeras parallellt.
@@ -1250,11 +1247,7 @@ def update_transcript_text(tid):
     except (ValueError, KeyError):
         return jsonify({"error": tr("Ogiltig filsökväg.")}), 400
     try:
-        if _key():
-            from core.crypto import encrypt_text_file
-            encrypt_text_file(txt_path, text, _key())
-        else:
-            txt_path.write_text(text, encoding="utf-8")
+        write_project_text(txt_path, text, _key())
     except Exception:
         logger.exception("update_transcript_text failed for tid=%s", tid)
         return jsonify({"error": tr("Kunde inte spara texten.")}), 500
@@ -1285,14 +1278,7 @@ def project_search():
         if not txt_path.exists():
             continue
         try:
-            if _key():
-                from core.crypto import is_encrypted_file, decrypt_text_file
-                if is_encrypted_file(txt_path):
-                    text = decrypt_text_file(txt_path, _key())
-                else:
-                    text = txt_path.read_text(encoding="utf-8")
-            else:
-                text = txt_path.read_text(encoding="utf-8")
+            text = read_project_text(txt_path, _key())
         except Exception:
             continue
 
@@ -1399,15 +1385,7 @@ def get_ocr_boxes(tid):
     boxes_path = Path(STATE["folder"]) / "transcripts" / f"{tid}_ocr_boxes.json"
     if not boxes_path.exists():
         return jsonify({"boxes": []})
-    if _key():
-        from core.crypto import is_encrypted_file, decrypt_json_file
-        if is_encrypted_file(boxes_path):
-            boxes = decrypt_json_file(boxes_path, _key())
-        else:
-            boxes = json.loads(boxes_path.read_text(encoding="utf-8"))
-    else:
-        boxes = json.loads(boxes_path.read_text(encoding="utf-8"))
-    return jsonify({"boxes": boxes})
+    return jsonify({"boxes": read_project_json(boxes_path, _key())})
 
 
 def _ocr_photos_job(job_id: str, tid: str, folder: str, photo_paths: list,
@@ -1432,23 +1410,11 @@ def _ocr_photos_job(job_id: str, tid: str, folder: str, photo_paths: list,
 
         # Append to transcript .txt
         txt_path = Path(folder) / "transcripts" / f"{tid}.txt"
-        if enc_key:
-            from core.crypto import is_encrypted_file, decrypt_text_file, encrypt_text_file
-            if txt_path.exists() and is_encrypted_file(txt_path):
-                existing = decrypt_text_file(txt_path, enc_key)
-            elif txt_path.exists():
-                existing = txt_path.read_text(encoding="utf-8")
-            else:
-                existing = ""
-        else:
-            existing = txt_path.read_text(encoding="utf-8") if txt_path.exists() else ""
+        existing = read_project_text(txt_path, enc_key) if txt_path.exists() else ""
         separator = "\n\n---\n\n"
         appended = separator.join(texts)
         new_text = (existing.rstrip() + separator + appended) if existing.strip() else appended
-        if enc_key:
-            encrypt_text_file(txt_path, new_text, enc_key)
-        else:
-            txt_path.write_text(new_text, encoding="utf-8")
+        write_project_text(txt_path, new_text, enc_key)
 
         if enc_key:
             final_text = new_text
@@ -1504,16 +1470,7 @@ def get_segments(tid):
     seg_path = Path(STATE["folder"]) / "transcripts" / f"{tid}_segments.json"
     if not seg_path.exists():
         return jsonify({"segments": []})
-    if _key():
-        from core.crypto import is_encrypted_file, decrypt_json_file
-        if is_encrypted_file(seg_path):
-            segs = decrypt_json_file(seg_path, _key())
-        else:
-            with open(seg_path, encoding="utf-8") as f:
-                segs = json.load(f)
-    else:
-        with open(seg_path, encoding="utf-8") as f:
-            segs = json.load(f)
+    segs = read_project_json(seg_path, _key())
     return jsonify({"segments": segs})
 
 
@@ -1743,31 +1700,17 @@ def delete_code(code_id):
     # Remove annotations that referenced the deleted code (all coders).
     ann_dir = Path(STATE["folder"]) / "annotations"
     if ann_dir.exists():
-        import json as _json
         for f in ann_dir.glob("*.json"):
             # Skip sidecar files (e.g. formatting)
             if f.stem.count(".") != 1:
                 continue
             try:
-                if _key():
-                    from core.crypto import is_encrypted_file, decrypt_json_file, encrypt_json_file
-                    if is_encrypted_file(f):
-                        data = decrypt_json_file(f, _key())
-                    else:
-                        with open(f, encoding="utf-8") as fh:
-                            data = _json.load(fh)
-                else:
-                    with open(f, encoding="utf-8") as fh:
-                        data = _json.load(fh)
+                data = read_project_json(f, _key())
                 anns = data.get("annotations", [])
                 kept = [a for a in anns if a.get("code_id") != code_id]
                 if len(kept) != len(anns):
                     data["annotations"] = kept
-                    if _key():
-                        encrypt_json_file(f, data, _key())
-                    else:
-                        with open(f, "w", encoding="utf-8") as fh:
-                            _json.dump(data, fh, ensure_ascii=False, indent=2)
+                    write_project_json(f, data, _key())
             except Exception:
                 logger.exception("delete_code cleanup failed for %s", f)
     proj_mod.save_project(STATE["folder"], STATE["project"], key=_key())

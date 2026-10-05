@@ -16,6 +16,7 @@ from pathlib import Path
 from xml.etree import ElementTree as ET
 
 from .annotation import load_all_coders
+from .crypto import read_project_text
 
 _NS = "urn:QDA-XML:project:1.0"
 _XSI = "http://www.w3.org/2001/XMLSchema-instance"
@@ -128,15 +129,7 @@ def export_qdpx(folder: str, project: dict,
         if not txt_path.exists():
             continue
 
-        if key:
-            from core.crypto import is_encrypted_file, decrypt_text_file
-            if is_encrypted_file(txt_path):
-                plain_text = decrypt_text_file(txt_path, key)
-            else:
-                plain_text = txt_path.read_text(encoding="utf-8")
-        else:
-            plain_text = txt_path.read_text(encoding="utf-8")
-        plain_texts[tid] = plain_text
+        plain_texts[tid] = read_project_text(txt_path, key)
         internal_path = f"sources/{tid}.txt"
 
         src_el = _sub(

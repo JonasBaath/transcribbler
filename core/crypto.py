@@ -143,3 +143,32 @@ def encrypt_json_file(path: Path, data, key: bytes):
 def decrypt_json_file(path: Path, key: bytes):
     raw = decrypt_file(path, key)
     return json.loads(raw)
+
+
+# Project files are encrypted when the project has a key. Files written before
+# encryption was switched on stay plain, so reads check the magic bytes.
+
+def read_project_text(path: Path, key: bytes | None) -> str:
+    if key and is_encrypted_file(path):
+        return decrypt_text_file(path, key)
+    return path.read_text(encoding="utf-8")
+
+
+def read_project_json(path: Path, key: bytes | None):
+    if key and is_encrypted_file(path):
+        return decrypt_json_file(path, key)
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def write_project_text(path: Path, text: str, key: bytes | None):
+    if key:
+        encrypt_text_file(path, text, key)
+    else:
+        path.write_text(text, encoding="utf-8")
+
+
+def write_project_json(path: Path, data, key: bytes | None):
+    if key:
+        encrypt_json_file(path, data, key)
+    else:
+        path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")

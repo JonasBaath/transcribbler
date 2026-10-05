@@ -15,6 +15,8 @@ from pathlib import Path
 
 import docx
 
+from core.crypto import read_project_text, write_project_json, write_project_text
+
 PROJECT_FILE = "project.json"
 TRANSCRIPTS_DIR = "transcripts"
 ANNOTATIONS_DIR = "annotations"
@@ -210,11 +212,7 @@ def add_transcript(folder: str, project: dict, src_path: str, name: str = "",
     text, fmt_spans = _extract_text_with_formatting(src)
     # Save plain-text version alongside original
     txt_path = Path(folder) / TRANSCRIPTS_DIR / f"{tid}.txt"
-    if key:
-        from core.crypto import encrypt_text_file
-        encrypt_text_file(txt_path, text, key)
-    else:
-        txt_path.write_text(text, encoding="utf-8")
+    write_project_text(txt_path, text, key)
 
     # Save formatting spans (bold/italic) if any were found in the document
     if fmt_spans:
@@ -265,7 +263,6 @@ def add_audio_transcript(folder: str, project: dict, tid: str, name: str,
     meta           — {whisper_model, language, diarization, diarization_settings,
                       speakers (name-mapping dict)}
     """
-    import json as _json
     folder_path = Path(folder)
     audio_src = Path(audio_src_path)
     ext = audio_src.suffix.lower()
@@ -277,22 +274,11 @@ def add_audio_transcript(folder: str, project: dict, tid: str, name: str,
 
     # Write extracted plain text
     txt_path = folder_path / TRANSCRIPTS_DIR / f"{tid}.txt"
-    if key:
-        from core.crypto import encrypt_text_file
-        encrypt_text_file(txt_path, text, key)
-    else:
-        txt_path.write_text(text, encoding="utf-8")
+    write_project_text(txt_path, text, key)
 
     # Write segments (separate file — can be large)
     seg_path = folder_path / TRANSCRIPTS_DIR / f"{tid}_segments.json"
-    if key:
-        from core.crypto import encrypt_json_file as _ejf
-        _ejf(seg_path, segments, key)
-    else:
-        seg_path.write_text(
-            _json.dumps(segments, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+    write_project_json(seg_path, segments, key)
 
     entry = {
         "id": tid,
@@ -334,11 +320,7 @@ def add_image_transcript(folder: str, project: dict, tid: str, name: str,
 
     # Write extracted plain text
     txt_path = folder_path / TRANSCRIPTS_DIR / f"{tid}.txt"
-    if key:
-        from core.crypto import encrypt_text_file
-        encrypt_text_file(txt_path, text, key)
-    else:
-        txt_path.write_text(text, encoding="utf-8")
+    write_project_text(txt_path, text, key)
 
     entry = {
         "id": tid,
@@ -374,11 +356,7 @@ def get_transcript_text(folder: str, transcript: dict,
     path = _safe_child(tdir, transcript["text_file"])
     if path is None:
         raise ValueError("invalid text_file path")
-    if key:
-        from core.crypto import is_encrypted_file, decrypt_text_file
-        if is_encrypted_file(path):
-            return decrypt_text_file(path, key)
-    return path.read_text(encoding="utf-8")
+    return read_project_text(path, key)
 
 
 def remove_transcript(folder: str, project: dict, tid: str,

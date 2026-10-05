@@ -5,10 +5,11 @@ Character positions refer to the plain-text .txt file — never change.
 """
 from __future__ import annotations
 
-import json
 import uuid
 from datetime import datetime
 from pathlib import Path
+
+from core.crypto import read_project_json, write_project_json
 
 ANNOTATIONS_DIR = "annotations"
 VALID_TYPES = {"bold", "italic"}
@@ -27,25 +28,15 @@ def load_formatting(folder: str, tid: str, coder: str,
     path = _fmt_path(folder, tid, coder)
     if not path.exists():
         return []
-    if key:
-        from core.crypto import is_encrypted_file, decrypt_json_file
-        if is_encrypted_file(path):
-            data = decrypt_json_file(path, key)
-            return data.get("spans", []) if isinstance(data, dict) else data
-    with open(path, encoding="utf-8") as f:
-        return json.load(f).get("spans", [])
+    data = read_project_json(path, key)
+    return data.get("spans", []) if isinstance(data, dict) else data
 
 
 def save_formatting(folder: str, tid: str, coder: str, spans: list,
                     key: bytes | None = None):
     path = _fmt_path(folder, tid, coder)
     payload = {"transcript_id": tid, "coder": coder, "spans": spans}
-    if key:
-        from core.crypto import encrypt_json_file
-        encrypt_json_file(path, payload, key)
-    else:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
+    write_project_json(path, payload, key)
 
 
 def add_format_span(folder: str, tid: str, coder: str,

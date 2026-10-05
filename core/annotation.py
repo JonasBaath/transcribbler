@@ -5,11 +5,12 @@ Each annotation stores character offsets into the plain-text transcript.
 """
 from __future__ import annotations
 
-import json
 import re
 import uuid
 from datetime import datetime
 from pathlib import Path
+
+from core.crypto import read_project_json, write_project_json
 
 ANNOTATIONS_DIR = "annotations"
 
@@ -31,14 +32,8 @@ def load_annotations(folder: str, tid: str, coder: str,
     path = _ann_path(folder, tid, coder)
     if not path.exists():
         return []
-    if key:
-        from core.crypto import is_encrypted_file, decrypt_json_file
-        if is_encrypted_file(path):
-            data = decrypt_json_file(path, key)
-            return data.get("annotations", []) if isinstance(data, dict) else data
-    with open(path, encoding="utf-8") as f:
-        data = json.load(f)
-    return data.get("annotations", [])
+    data = read_project_json(path, key)
+    return data.get("annotations", []) if isinstance(data, dict) else data
 
 
 def save_annotations(folder: str, tid: str, coder: str, annotations: list,
@@ -46,12 +41,7 @@ def save_annotations(folder: str, tid: str, coder: str, annotations: list,
     path = _ann_path(folder, tid, coder)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {"transcript_id": tid, "coder": coder, "annotations": annotations}
-    if key:
-        from core.crypto import encrypt_json_file
-        encrypt_json_file(path, payload, key)
-    else:
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
+    write_project_json(path, payload, key)
 
 
 # ---------------------------------------------------------------------------
@@ -152,13 +142,6 @@ def load_all_coders(folder: str, tid: str,
         # are plain identifiers without dots.
         if "." in coder:
             continue
-        if key:
-            from core.crypto import is_encrypted_file, decrypt_json_file
-            if is_encrypted_file(f):
-                data = decrypt_json_file(f, key)
-                result[coder] = data.get("annotations", []) if isinstance(data, dict) else data
-                continue
-        with open(f, encoding="utf-8") as fh:
-            data = json.load(fh)
-        result[coder] = data.get("annotations", [])
+        data = read_project_json(f, key)
+        result[coder] = data.get("annotations", []) if isinstance(data, dict) else data
     return result
