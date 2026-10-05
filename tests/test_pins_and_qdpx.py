@@ -125,3 +125,16 @@ def test_coded_transcripts_keep_spaces_and_split_mid_word(tmp_path):
     mid = {"id": "2", "code_id": "a", "coder": "anna", "start": 1, "end": 3, "text": "ej"}
     md = _transcript_section(codes, t, "Hej då", [mid], False)
     assert "H **[A]** *ej* då" in md
+
+
+def test_coded_transcripts_singular_count(tmp_path):
+    from core.export import export_markdown_transcripts
+    from core.i18n import set_lang
+    proj = _project(tmp_path, {"anna": [_text("0000bb01", "a", 0, 3)]})
+    assert "_1 kodning_" in export_markdown_transcripts(str(tmp_path), proj)
+    set_lang("en")
+    try:
+        md = export_markdown_transcripts(str(tmp_path), proj)
+    finally:
+        set_lang("sv")
+    assert "_1 annotation_" in md and "Coded transcripts" in md and "Code summary" in md

@@ -266,7 +266,7 @@ def _transcript_section(project: dict, t: dict, text: str, anns: list, show_code
 
     out = ["\n---\n", f"## {t.get('name', t['id'])}\n",
            # Hard line breaks keep each turn on its own line (Markdown joins single newlines)
-           f"_{tr('{n} kodningar', n=len(anns))}_\n", "".join(body).replace("\n", "  \n"),
+           f"_{tr('1 kodning') if len(anns) == 1 else tr('{n} kodningar', n=len(anns))}_\n", "".join(body).replace("\n", "  \n"),
            f"\n### {tr('Kodsammanfattning')}\n"]
     for a in anns:
         excerpt = a.get("text") or text[a["start"]:a["end"]]

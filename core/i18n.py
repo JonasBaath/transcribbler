@@ -133,6 +133,7 @@ EN: dict[str, str] = {
     "Kodsammanfattning": "Code summary",
     "{name} — Kodade transkript": "{name} — Coded transcripts",
     "Exporterad {date}": "Exported {date}",
+    "1 kodning": "1 annotation",
     "{n} kodningar": "{n} annotations",
     "nyckelpassage": "key passage",
     "Transkript": "Transcript",
