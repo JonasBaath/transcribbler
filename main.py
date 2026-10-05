@@ -5,6 +5,7 @@ Opens automatically in the default browser.
 """
 from __future__ import annotations
 
+import functools
 import json
 import logging
 import os
@@ -183,10 +184,13 @@ def _remove_recent(folder: str):
         json.dump(recent, f, ensure_ascii=False, indent=2)
 
 
-def _require_project():
-    if not STATE["folder"] or not STATE["project"]:
-        return jsonify({"error": tr("Inget projekt öppnat.")}), 400
-    return None
+def require_project(view):
+    @functools.wraps(view)
+    def wrapper(*args, **kwargs):
+        if not STATE["folder"] or not STATE["project"]:
+            return jsonify({"error": tr("Inget projekt öppnat.")}), 400
+        return view(*args, **kwargs)
+    return wrapper
 
 
 def _heic_to_jpeg_bytes(img_path: Path):
@@ -406,10 +410,8 @@ def open_project():
 
 
 @app.route("/api/project", methods=["GET"])
+@require_project
 def get_project():
-    err = _require_project()
-    if err:
-        return err
     return jsonify({
         "project": STATE["project"],
         "folder": STATE["folder"],
@@ -418,10 +420,8 @@ def get_project():
 
 
 @app.route("/api/project/settings", methods=["PATCH"])
+@require_project
 def update_project_settings():
-    err = _require_project()
-    if err:
-        return err
     data = request.json
     allowed = {"numbering", "name", "auto_identify", "trans_order",
                "use_weight", "use_waveform"}
@@ -588,6 +588,7 @@ def _ocr_job(job_id: str, image_path: str, folder: str, project: dict, name: str
 
 
 @app.route("/api/transcripts/upload", methods=["POST"])
+@require_project
 def upload_transcript():
     """
     Accept a multipart file upload.
@@ -595,10 +596,6 @@ def upload_transcript():
     - Audio: launches background job, returns {job_id} immediately.
     - Image: launches OCR background job, returns {job_id} immediately.
     """
-    err = _require_project()
-    if err:
-        return err
-
     from core.transcribe import is_audio
     from core.ocr import is_image
     import tempfile
@@ -953,15 +950,12 @@ def get_job(job_id):
 
 
 @app.route("/api/transcripts/commit/<job_id>", methods=["POST"])
+@require_project
 def commit_transcript(job_id):
     """
     Finalise a completed transcription job.
     Body: {name: str, speakers: {SPEAKER_00: "Intervjuare", ...}}
     """
-    err = _require_project()
-    if err:
-        return err
-
     job = JOBS.get(job_id)
     if not job or job["status"] != "done":
         return jsonify({"error": tr("Jobbet är inte klart eller hittades inte.")}), 400
@@ -1219,10 +1213,8 @@ def extract_voice_profile():
 
 
 @app.route("/api/transcripts/<tid>/text", methods=["GET"])
+@require_project
 def get_transcript_text(tid):
-    err = _require_project()
-    if err:
-        return err
     t = next((t for t in STATE["project"]["transcripts"] if t["id"] == tid), None)
     if not t:
         return jsonify({"error": tr("Transkript hittades inte.")}), 404
@@ -1231,11 +1223,9 @@ def get_transcript_text(tid):
 
 
 @app.route("/api/transcripts/<tid>/text", methods=["PATCH"])
+@require_project
 def update_transcript_text(tid):
     """Overwrite the plain-text content of a transcript."""
-    err = _require_project()
-    if err:
-        return err
     t = next((t for t in STATE["project"]["transcripts"] if t["id"] == tid), None)
     if not t:
         return jsonify({"error": tr("Transkript hittades inte.")}), 404
@@ -1255,11 +1245,9 @@ def update_transcript_text(tid):
 
 
 @app.route("/api/search", methods=["GET"])
+@require_project
 def project_search():
     """Full-text search across all transcripts in the project."""
-    err = _require_project()
-    if err:
-        return err
     q = request.args.get("q", "").strip()[:500]   # cap at 500 chars
     if len(q) < 2:
         return jsonify({"results": [], "total_matches": 0, "query": q})
@@ -1308,11 +1296,9 @@ def project_search():
 
 
 @app.route("/api/transcripts/<tid>/audio", methods=["GET"])
+@require_project
 def get_audio(tid):
     """Stream the audio file for an audio-sourced transcript."""
-    err = _require_project()
-    if err:
-        return err
     t = next((t for t in STATE["project"]["transcripts"] if t["id"] == tid), None)
     if not t or not t.get("audio_file"):
         return jsonify({"error": tr("Ingen ljudfil hittades.")}), 404
@@ -1326,11 +1312,9 @@ def get_audio(tid):
 
 
 @app.route("/api/transcripts/<tid>/source-image", methods=["GET"])
+@require_project
 def get_source_image(tid):
     """Serve the original source image for an image-sourced transcript."""
-    err = _require_project()
-    if err:
-        return err
     t = next((t for t in STATE["project"]["transcripts"] if t["id"] == tid), None)
     if not t or not t.get("source_file"):
         return jsonify({"error": tr("Ingen källbild hittades.")}), 404
@@ -1349,11 +1333,9 @@ def get_source_image(tid):
 
 
 @app.route("/api/transcripts/<tid>/photo/<int:n>", methods=["GET"])
+@require_project
 def get_transcript_photo(tid, n):
     """Serve the nth attached photo for a transcript (imported from Notescribbler zip)."""
-    err = _require_project()
-    if err:
-        return err
     t = next((t for t in STATE["project"]["transcripts"] if t["id"] == tid), None)
     if not t:
         return "", 404
@@ -1377,11 +1359,9 @@ def get_transcript_photo(tid, n):
 
 
 @app.route("/api/transcripts/<tid>/ocr-boxes", methods=["GET"])
+@require_project
 def get_ocr_boxes(tid):
     """Return saved OCR bounding boxes for an image transcript."""
-    err = _require_project()
-    if err:
-        return err
     boxes_path = Path(STATE["folder"]) / "transcripts" / f"{tid}_ocr_boxes.json"
     if not boxes_path.exists():
         return jsonify({"boxes": []})
@@ -1430,11 +1410,9 @@ def _ocr_photos_job(job_id: str, tid: str, folder: str, photo_paths: list,
 
 
 @app.route("/api/transcripts/<tid>/ocr-photos", methods=["POST"])
+@require_project
 def ocr_transcript_photos(tid):
     """Start a background OCR job on all attached photos for a transcript."""
-    err = _require_project()
-    if err:
-        return err
     t = next((t for t in STATE["project"]["transcripts"] if t["id"] == tid), None)
     if not t:
         return jsonify({"error": tr("Transkriptet hittades inte.")}), 404
@@ -1462,11 +1440,9 @@ def ocr_transcript_photos(tid):
 
 
 @app.route("/api/transcripts/<tid>/segments", methods=["GET"])
+@require_project
 def get_segments(tid):
     """Return diarization segments for a transcript (if available)."""
-    err = _require_project()
-    if err:
-        return err
     seg_path = Path(STATE["folder"]) / "transcripts" / f"{tid}_segments.json"
     if not seg_path.exists():
         return jsonify({"segments": []})
@@ -1475,19 +1451,15 @@ def get_segments(tid):
 
 
 @app.route("/api/transcripts/<tid>", methods=["DELETE"])
+@require_project
 def delete_transcript(tid):
-    err = _require_project()
-    if err:
-        return err
     STATE["project"] = proj_mod.remove_transcript(STATE["folder"], STATE["project"], tid, key=_key())
     return jsonify({"ok": True, "project": STATE["project"]})
 
 
 @app.route("/api/transcripts/<tid>/memo", methods=["PATCH"])
+@require_project
 def update_transcript_memo(tid):
-    err = _require_project()
-    if err:
-        return err
     memo = request.json.get("memo", "")
     for t in STATE["project"]["transcripts"]:
         if t["id"] == tid:
@@ -1498,10 +1470,8 @@ def update_transcript_memo(tid):
 
 
 @app.route("/api/transcripts/<tid>/rename", methods=["PATCH"])
+@require_project
 def rename_transcript(tid):
-    err = _require_project()
-    if err:
-        return err
     new_name = (request.json.get("name") or "").strip()
     if not new_name:
         return jsonify({"error": tr("Namn får inte vara tomt.")}), 400
@@ -1516,10 +1486,8 @@ def rename_transcript(tid):
 
 
 @app.route("/api/transcripts/reorder", methods=["PATCH"])
+@require_project
 def reorder_transcripts():
-    err = _require_project()
-    if err:
-        return err
     data = request.json or {}
     ordered_ids = data.get("order")
     if not ordered_ids or not isinstance(ordered_ids, list):
@@ -1543,10 +1511,8 @@ def reorder_transcripts():
 
 
 @app.route("/api/transcripts/categorize", methods=["PATCH"])
+@require_project
 def categorize_transcripts():
-    err = _require_project()
-    if err:
-        return err
     data = request.json or {}
     tids = set(data.get("tids") or [])
     category = data.get("category")
@@ -1563,10 +1529,8 @@ def categorize_transcripts():
 
 
 @app.route("/api/transcripts/tag", methods=["PATCH"])
+@require_project
 def tag_transcripts():
-    err = _require_project()
-    if err:
-        return err
     data = request.json or {}
     tids = set(data.get("tids") or [])
     add = [s.strip() for s in (data.get("add") or []) if isinstance(s, str) and s.strip()]
@@ -1591,10 +1555,8 @@ def tag_transcripts():
 # ---------------------------------------------------------------------------
 
 @app.route("/api/stats", methods=["GET"])
+@require_project
 def get_stats():
-    err = _require_project()
-    if err:
-        return err
     from core.stats import compute_stats
     tid = request.args.get("tid") or None
     return jsonify(compute_stats(STATE["folder"], STATE["project"], tid, key=_key()))
@@ -1605,10 +1567,8 @@ def get_stats():
 # ---------------------------------------------------------------------------
 
 @app.route("/api/transcripts/<tid>/irr", methods=["GET"])
+@require_project
 def get_irr(tid):
-    err = _require_project()
-    if err:
-        return err
     coder_a = request.args.get("coder_a", "").strip()
     coder_b = request.args.get("coder_b", "").strip()
     if not coder_a or not coder_b:
@@ -1629,11 +1589,9 @@ def get_irr(tid):
 
 
 @app.route("/api/coders", methods=["GET"])
+@require_project
 def get_coders():
     """List all coders who have annotation files in this project."""
-    err = _require_project()
-    if err:
-        return err
     ann_dir = Path(STATE["folder"]) / "annotations"
     coders = set()
     if ann_dir.exists():
@@ -1650,10 +1608,8 @@ def get_coders():
 # ---------------------------------------------------------------------------
 
 @app.route("/api/codes", methods=["GET"])
+@require_project
 def get_codes():
-    err = _require_project()
-    if err:
-        return err
     return jsonify({
         "tree": cb_mod.build_tree(STATE["project"]),
         "flat": cb_mod.flat_list(STATE["project"]),
@@ -1661,10 +1617,8 @@ def get_codes():
 
 
 @app.route("/api/codes", methods=["POST"])
+@require_project
 def add_code():
-    err = _require_project()
-    if err:
-        return err
     data = request.json
     name = data.get("name", "").strip()
     if not name:
@@ -1681,10 +1635,8 @@ def add_code():
 
 
 @app.route("/api/codes/<code_id>", methods=["PATCH"])
+@require_project
 def update_code(code_id):
-    err = _require_project()
-    if err:
-        return err
     data = request.json
     STATE["project"] = cb_mod.update_code(STATE["project"], code_id, **data)
     proj_mod.save_project(STATE["folder"], STATE["project"], key=_key())
@@ -1692,10 +1644,8 @@ def update_code(code_id):
 
 
 @app.route("/api/codes/<code_id>", methods=["DELETE"])
+@require_project
 def delete_code(code_id):
-    err = _require_project()
-    if err:
-        return err
     STATE["project"] = cb_mod.delete_code(STATE["project"], code_id)
     # Remove annotations that referenced the deleted code (all coders).
     ann_dir = Path(STATE["folder"]) / "annotations"
@@ -1718,10 +1668,8 @@ def delete_code(code_id):
 
 
 @app.route("/api/codes/merge", methods=["POST"])
+@require_project
 def merge_codes_route():
-    err = _require_project()
-    if err:
-        return err
     data = request.json
     source_id = data.get("source_id")
     target_id = data.get("target_id")
@@ -1746,20 +1694,16 @@ def merge_codes_route():
 # ---------------------------------------------------------------------------
 
 @app.route("/api/transcripts/<tid>/annotations", methods=["GET"])
+@require_project
 def get_annotations(tid):
-    err = _require_project()
-    if err:
-        return err
     coder = request.args.get("coder", STATE["coder"])
     anns = ann_mod.load_annotations(STATE["folder"], tid, coder, key=_key())
     return jsonify({"annotations": anns})
 
 
 @app.route("/api/transcripts/<tid>/annotations", methods=["POST"])
+@require_project
 def add_annotation(tid):
-    err = _require_project()
-    if err:
-        return err
     data = request.json
     kind = data.get("kind", "text")
     if kind == "point":
@@ -1795,20 +1739,16 @@ def add_annotation(tid):
 
 
 @app.route("/api/transcripts/<tid>/annotations/<ann_id>", methods=["PATCH"])
+@require_project
 def update_annotation(tid, ann_id):
-    err = _require_project()
-    if err:
-        return err
     data = request.json
     ok = ann_mod.update_annotation(STATE["folder"], tid, STATE["coder"], ann_id, key=_key(), **data)
     return jsonify({"ok": ok})
 
 
 @app.route("/api/transcripts/<tid>/annotations/<ann_id>", methods=["DELETE"])
+@require_project
 def delete_annotation(tid, ann_id):
-    err = _require_project()
-    if err:
-        return err
     ok = ann_mod.delete_annotation(STATE["folder"], tid, STATE["coder"], ann_id, key=_key())
     return jsonify({"ok": ok})
 
@@ -1830,11 +1770,9 @@ def _import_codings(data: dict):
 
 
 @app.route("/api/codings/import", methods=["POST"])
+@require_project
 def import_codings_upload():
     """Import a codings file chosen in the file picker (multipart 'file')."""
-    err = _require_project()
-    if err:
-        return err
     f = request.files.get("file")
     if not f or not f.filename:
         return jsonify({"error": tr("Ingen fil bifogad.")}), 400
@@ -1857,11 +1795,9 @@ def import_codings_upload():
 
 
 @app.route("/api/codings/export", methods=["GET"])
+@require_project
 def export_codings():
     """Download the active coder's annotations as a codings file."""
-    err = _require_project()
-    if err:
-        return err
     bundle = merge_mod.export_coder_bundle(
         STATE["folder"], STATE["project"], STATE["coder"], key=_key())
     safe_coder = _ascii_slug(STATE["coder"]) or "coder"
@@ -1931,17 +1867,13 @@ def _code_counts() -> dict:
 
 
 @app.route("/api/export/markdown/codebook", methods=["GET"])
+@require_project
 def export_md_codebook():
-    err = _require_project()
-    if err:
-        return err
     return _download(exp_mod.export_markdown_codebook(STATE["project"], _code_counts()), "kodbok", "md")
 
 @app.route("/api/codes/stats", methods=["GET"])
+@require_project
 def get_codes_stats():
-    err = _require_project()
-    if err:
-        return err
     from core.stats import compute_stats
     result = compute_stats(STATE["folder"], STATE["project"], key=_key())
     counts = {r["code_id"]: r["count"] for r in result["rows"]}
@@ -1949,10 +1881,8 @@ def get_codes_stats():
 
 
 @app.route("/api/export/codebook/csv", methods=["GET"])
+@require_project
 def export_codebook_csv():
-    err = _require_project()
-    if err:
-        return err
     return _download(exp_mod.export_codebook_csv(STATE["project"], _code_counts()), "kodbok", "csv")
 
 # ---------------------------------------------------------------------------
@@ -1960,19 +1890,15 @@ def export_codebook_csv():
 # ---------------------------------------------------------------------------
 
 @app.route("/api/code-matrix", methods=["GET"])
+@require_project
 def get_code_matrix():
-    err = _require_project()
-    if err:
-        return err
     from core.code_matrix import compute_code_matrix
     return jsonify(compute_code_matrix(STATE["folder"], STATE["project"], key=_key()))
 
 
 @app.route("/api/export/code-matrix/csv", methods=["GET"])
+@require_project
 def export_code_matrix_csv():
-    err = _require_project()
-    if err:
-        return err
     import io, csv
     from core.code_matrix import compute_code_matrix
     data = compute_code_matrix(STATE["folder"], STATE["project"], key=_key())
@@ -1994,19 +1920,15 @@ def export_code_matrix_csv():
 # ---------------------------------------------------------------------------
 
 @app.route("/api/cooccurrence", methods=["GET"])
+@require_project
 def get_cooccurrence():
-    err = _require_project()
-    if err:
-        return err
     from core.cooccurrence import compute_cooccurrence
     return jsonify(compute_cooccurrence(STATE["folder"], STATE["project"], key=_key()))
 
 
 @app.route("/api/export/cooccurrence/csv", methods=["GET"])
+@require_project
 def export_cooccurrence_csv():
-    err = _require_project()
-    if err:
-        return err
     import io, csv
     from core.cooccurrence import compute_cooccurrence
     data = compute_cooccurrence(STATE["folder"], STATE["project"], key=_key())
@@ -2030,11 +1952,9 @@ def export_cooccurrence_csv():
 # ---------------------------------------------------------------------------
 
 @app.route("/api/codes/anchors", methods=["GET"])
+@require_project
 def get_all_anchors():
     """Return {code_id: {text, tid}} for every code that has an anchor annotation."""
-    err = _require_project()
-    if err:
-        return err
     from core.annotation import load_all_coders as _load_all
     result = {}
     for t in STATE["project"].get("transcripts", []):
@@ -2052,10 +1972,8 @@ def get_all_anchors():
 # ---------------------------------------------------------------------------
 
 @app.route("/api/transcripts/<tid>/formatting", methods=["GET"])
+@require_project
 def get_formatting(tid):
-    err = _require_project()
-    if err:
-        return err
     from core.formatting import load_formatting
     spans = load_formatting(STATE["folder"], tid, STATE["coder"], key=_key())
     imported = load_formatting(STATE["folder"], tid, "__import__", key=_key())
@@ -2067,10 +1985,8 @@ def get_formatting(tid):
 
 
 @app.route("/api/transcripts/<tid>/formatting", methods=["POST"])
+@require_project
 def add_formatting(tid):
-    err = _require_project()
-    if err:
-        return err
     from core.formatting import add_format_span
     data = request.json
     try:
@@ -2086,10 +2002,8 @@ def add_formatting(tid):
 
 
 @app.route("/api/transcripts/<tid>/formatting/<span_id>", methods=["DELETE"])
+@require_project
 def delete_formatting(tid, span_id):
-    err = _require_project()
-    if err:
-        return err
     from core.formatting import delete_format_span
     ok = delete_format_span(STATE["folder"], tid, STATE["coder"], span_id, key=_key())
     return jsonify({"ok": ok})
@@ -2100,19 +2014,15 @@ def delete_formatting(tid, span_id):
 # ---------------------------------------------------------------------------
 
 @app.route("/api/analysis/excerpts", methods=["GET"])
+@require_project
 def get_analysis_excerpts():
-    err = _require_project()
-    if err:
-        return err
     from core.analysis import gather_excerpts
     return jsonify(gather_excerpts(STATE["folder"], STATE["project"], key=_key()))
 
 
 @app.route("/api/analysis/export", methods=["POST"])
+@require_project
 def export_analysis():
-    err = _require_project()
-    if err:
-        return err
     from core.analysis import gather_excerpts, filter_excerpts_by_tags
     from core import analysis_export as aexp
 
@@ -2152,10 +2062,8 @@ def export_analysis():
 # ---------------------------------------------------------------------------
 
 @app.route("/api/export/codetree/docx", methods=["GET"])
+@require_project
 def export_codetree_docx():
-    err = _require_project()
-    if err:
-        return err
     from core.export import export_codetree_docx as _docx
     data = _docx(STATE["project"])
     stem = "kodbok" if request.args.get("as") == "kodbok" else "kodtrad"
@@ -2163,10 +2071,8 @@ def export_codetree_docx():
 
 
 @app.route("/api/export/codetree/odt", methods=["GET"])
+@require_project
 def export_codetree_odt():
-    err = _require_project()
-    if err:
-        return err
     from core.export import export_codetree_odt as _odt
     data = _odt(STATE["project"])
     stem = "kodbok" if request.args.get("as") == "kodbok" else "kodtrad"
@@ -2174,10 +2080,8 @@ def export_codetree_odt():
 
 
 @app.route("/api/export/to-folder", methods=["POST"])
+@require_project
 def export_to_folder():
-    err = _require_project()
-    if err:
-        return err
     data = request.json or {}
     dest_str = (data.get("folder") or "").strip()
     formats = data.get("formats") or []

@@ -523,3 +523,20 @@ class TestCoderNameAndFilenames:
             r.headers["Content-Disposition"].encode("latin-1")
         finally:
             main.STATE["coder"] = old
+
+
+def test_project_routes_refuse_without_open_project(flask_client, monkeypatch):
+    import re
+    import main
+    monkeypatch.setitem(main.STATE, "folder", None)
+    monkeypatch.setitem(main.STATE, "project", None)
+    guarded = [r for r in main.app.url_map.iter_rules()
+               if hasattr(main.app.view_functions[r.endpoint], "__wrapped__")]
+    assert len(guarded) >= 45
+    for rule in guarded:
+        url = re.sub(r"<int:[^>]+>", "0", rule.rule)
+        url = re.sub(r"<[^>]+>", "x", url)
+        method = sorted(rule.methods - {"HEAD", "OPTIONS"})[0]
+        r = flask_client.open(url, method=method, json={})
+        assert r.status_code == 400, (method, url)
+        assert r.get_json()["error"], url
