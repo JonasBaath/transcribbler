@@ -1922,10 +1922,8 @@ def export_codings():
     bundle = merge_mod.export_coder_bundle(
         STATE["folder"], STATE["project"], STATE["coder"], key=_key())
     safe_coder = _ascii_slug(STATE["coder"]) or "coder"
-    fname = _export_filename(f"{tr('kodningar')}_{safe_coder}", "json")
-    return Response(json.dumps(bundle, ensure_ascii=False, indent=2),
-                    mimetype="application/json",
-                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+    return _download(json.dumps(bundle, ensure_ascii=False, indent=2),
+                     f"{tr('kodningar')}_{safe_coder}", "json")
 
 
 # ---------------------------------------------------------------------------
@@ -1955,22 +1953,46 @@ def _export_filename(stem: str, ext: str) -> str:
     return "_".join(parts) + "." + ext
 
 
+_MIMETYPES = {
+    "md": "text/markdown",
+    "csv": "text/csv",
+    "json": "application/json",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "odt": "application/vnd.oasis.opendocument.text",
+    "qdpx": "application/zip",
+}
+
+
+def _export_bytes(content, ext: str) -> bytes:
+    if isinstance(content, bytes):
+        return content
+    # BOM so that Excel recognises UTF-8 CSV (otherwise å, ä, ö are garbled)
+    return content.encode("utf-8-sig" if ext == "csv" else "utf-8")
+
+
+def _download(content, stem: str, ext: str) -> Response:
+    fname = _export_filename(stem, ext)
+    return Response(_export_bytes(content, ext), mimetype=_MIMETYPES[ext],
+                    headers={"Content-Disposition": f'attachment; filename="{fname}"'})
+
+
+def _code_counts() -> dict:
+    """Annotations per code for codebook exports; empty if counting fails."""
+    from core.stats import compute_stats
+    try:
+        rows = compute_stats(STATE["folder"], STATE["project"], key=_key())["rows"]
+    except Exception:
+        logger.exception("compute_stats failed during codebook export")
+        return {}
+    return {r["code_id"]: r["count"] for r in rows}
+
+
 @app.route("/api/export/markdown/codebook", methods=["GET"])
 def export_md_codebook():
     err = _require_project()
     if err:
         return err
-    from core.stats import compute_stats
-    try:
-        result = compute_stats(STATE["folder"], STATE["project"], key=_key())
-        counts = {r["code_id"]: r["count"] for r in result["rows"]}
-    except Exception:
-        logger.exception("compute_stats failed in md codebook export")
-        counts = {}
-    md = exp_mod.export_markdown_codebook(STATE["project"], counts)
-    return app.response_class(md, mimetype="text/markdown",
-                              headers={"Content-Disposition": f'attachment; filename="{_export_filename("kodbok", "md")}"'})
-
+    return _download(exp_mod.export_markdown_codebook(STATE["project"], _code_counts()), "kodbok", "md")
 
 @app.route("/api/codes/stats", methods=["GET"])
 def get_codes_stats():
@@ -1988,20 +2010,7 @@ def export_codebook_csv():
     err = _require_project()
     if err:
         return err
-    from core.stats import compute_stats
-    try:
-        result = compute_stats(STATE["folder"], STATE["project"], key=_key())
-        counts = {r["code_id"]: r["count"] for r in result["rows"]}
-    except Exception:
-        logger.exception("compute_stats failed in codebook CSV export")
-        counts = {}
-    csv_data = exp_mod.export_codebook_csv(STATE["project"], counts)
-    return app.response_class(
-        csv_data.encode("utf-8-sig"),
-        mimetype="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{_export_filename("kodbok", "csv")}"'},
-    )
-
+    return _download(exp_mod.export_codebook_csv(STATE["project"], _code_counts()), "kodbok", "csv")
 
 # ---------------------------------------------------------------------------
 # Code matrix routes (transkript × kod)
@@ -2034,11 +2043,7 @@ def export_code_matrix_csv():
         w.writerow(row)
     totals_row = [tr("TOTALT")] + [data["totals"].get(c["id"], 0) for c in data["codes"]]
     w.writerow(totals_row)
-    return app.response_class(
-        buf.getvalue().encode("utf-8-sig"),
-        mimetype="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{_export_filename("kodmatris", "csv")}"'},
-    )
+    return _download(buf.getvalue(), "kodmatris", "csv")
 
 
 # ---------------------------------------------------------------------------
@@ -2070,11 +2075,7 @@ def export_cooccurrence_csv():
     for ca in codes:
         row = [ca["name"]] + [matrix.get(ca["id"], {}).get(cb["id"], 0) for cb in codes]
         w.writerow(row)
-    return app.response_class(
-        buf.getvalue().encode("utf-8-sig"),
-        mimetype="text/csv; charset=utf-8",
-        headers={"Content-Disposition": f'attachment; filename="{_export_filename("kodoverlapp", "csv")}"'},
-    )
+    return _download(buf.getvalue(), "kodoverlapp", "csv")
 
 
 # ---------------------------------------------------------------------------
@@ -2174,7 +2175,6 @@ def export_analysis():
 
     data = request.json or {}
     fmt = data.get("format", "md")
-    mode = data.get("mode", "separate")
     code_ids = data.get("code_ids")
     excerpt_ids = data.get("excerpt_ids")
     anchor_only = data.get("anchor_only", False)
@@ -2194,25 +2194,15 @@ def export_analysis():
     if anchor_only:
         excerpts = [e for e in excerpts if e.get("anchor")]
 
-    if fmt == "md":
-        content = aexp.export_analysis_md(STATE["project"], excerpts, mode)
-        return Response(content, mimetype="text/markdown",
-                        headers={"Content-Disposition": f'attachment; filename="{_export_filename("analys", "md")}"'})
-    elif fmt == "csv":
-        content = aexp.export_analysis_csv(STATE["project"], excerpts, mode)
-        return Response(content, mimetype="text/csv",
-                        headers={"Content-Disposition": f'attachment; filename="{_export_filename("analys", "csv")}"'})
-    elif fmt == "docx":
-        content = aexp.export_analysis_docx(STATE["project"], excerpts, mode)
-        return Response(content, mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        headers={"Content-Disposition": f'attachment; filename="{_export_filename("analys", "docx")}"'})
-    elif fmt == "odt":
-        content = aexp.export_analysis_odt(STATE["project"], excerpts, mode)
-        return Response(content, mimetype="application/vnd.oasis.opendocument.text",
-                        headers={"Content-Disposition": f'attachment; filename="{_export_filename("analys", "odt")}"'})
-    else:
+    exporters = {
+        "md": aexp.export_analysis_md,
+        "csv": aexp.export_analysis_csv,
+        "docx": aexp.export_analysis_docx,
+        "odt": aexp.export_analysis_odt,
+    }
+    if fmt not in exporters:
         return jsonify({"error": f"Unknown format: {fmt}"}), 400
-
+    return _download(exporters[fmt](STATE["project"], excerpts), "analys", fmt)
 
 # ---------------------------------------------------------------------------
 # Code tree export routes
@@ -2226,9 +2216,7 @@ def export_codetree_docx():
     from core.export import export_codetree_docx as _docx
     data = _docx(STATE["project"])
     stem = "kodbok" if request.args.get("as") == "kodbok" else "kodtrad"
-    return app.response_class(
-        data, mimetype="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": f'attachment; filename="{_export_filename(stem, "docx")}"'})
+    return _download(data, stem, "docx")
 
 
 @app.route("/api/export/codetree/odt", methods=["GET"])
@@ -2239,9 +2227,7 @@ def export_codetree_odt():
     from core.export import export_codetree_odt as _odt
     data = _odt(STATE["project"])
     stem = "kodbok" if request.args.get("as") == "kodbok" else "kodtrad"
-    return app.response_class(
-        data, mimetype="application/vnd.oasis.opendocument.text",
-        headers={"Content-Disposition": f'attachment; filename="{_export_filename(stem, "odt")}"'})
+    return _download(data, stem, "odt")
 
 
 @app.route("/api/export/to-folder", methods=["POST"])
@@ -2265,78 +2251,32 @@ def export_to_folder():
         logger.exception("export_to_folder mkdir failed: %s", dest_str)
         return jsonify({"error": tr("Kunde inte skapa exportmappen.")}), 400
 
+    folder, project, key = STATE["folder"], STATE["project"], _key()
+    from core.qdpx import export_qdpx
+    exporters = [
+        ("csv_tidy", "annoteringar_tidy", "csv", lambda: exp_mod.export_csv_tidy(folder, project, tid, key=key)),
+        ("csv", "annoteringar", "csv", lambda: exp_mod.export_csv(folder, project, tid, key=key)),
+        ("md_codes", "citat_per_kod", "md", lambda: exp_mod.export_markdown_by_code(folder, project, tid, key=key)),
+        ("md_codebook", "kodbok", "md", lambda: exp_mod.export_markdown_codebook(project, _code_counts())),
+        ("md_transcript", f"{tr('transkript')}_{current_tid}", "md",
+         lambda: exp_mod.export_markdown_transcript(folder, project, current_tid, STATE["coder"], key=key)),
+        ("qdpx", "projekt", "qdpx", lambda: export_qdpx(folder, project, key=key)),
+    ]
     written = []
     errors = []
-
-    if "csv_tidy" in formats:
+    for fmt, stem, ext, build in exporters:
+        if fmt not in formats:
+            continue
+        if fmt == "md_transcript" and not current_tid:
+            errors.append(tr("Inget transkript öppet för detta exportformat."))
+            continue
         try:
-            csv_data = exp_mod.export_csv_tidy(STATE["folder"], STATE["project"], tid, key=_key())
-            fname = _export_filename("annoteringar_tidy", "csv")
-            (dest / fname).write_text(csv_data, encoding="utf-8")
+            fname = _export_filename(stem, ext)
+            (dest / fname).write_bytes(_export_bytes(build(), ext))
             written.append(fname)
         except Exception:
-            logger.exception("export csv_tidy failed")
-            errors.append("csv_tidy")
-
-    if "csv" in formats:
-        try:
-            csv_data = exp_mod.export_csv(STATE["folder"], STATE["project"], tid, key=_key())
-            fname = _export_filename("annoteringar", "csv")
-            (dest / fname).write_text(csv_data, encoding="utf-8")
-            written.append(fname)
-        except Exception:
-            logger.exception("export csv failed")
-            errors.append("csv")
-
-    if "md_codes" in formats:
-        try:
-            md = exp_mod.export_markdown_by_code(STATE["folder"], STATE["project"], tid, key=_key())
-            fname = _export_filename("citat_per_kod", "md")
-            (dest / fname).write_text(md, encoding="utf-8")
-            written.append(fname)
-        except Exception:
-            logger.exception("export md_codes failed")
-            errors.append("md_codes")
-
-    if "md_codebook" in formats:
-        try:
-            from core.stats import compute_stats as _cs
-            try:
-                _r = _cs(STATE["folder"], STATE["project"], key=_key())
-                _cb_counts = {r["code_id"]: r["count"] for r in _r["rows"]}
-            except Exception:
-                _cb_counts = {}
-            md = exp_mod.export_markdown_codebook(STATE["project"], _cb_counts)
-            fname = _export_filename("kodbok", "md")
-            (dest / fname).write_text(md, encoding="utf-8")
-            written.append(fname)
-        except Exception:
-            logger.exception("export md_codebook failed")
-            errors.append("md_codebook")
-
-    if "md_transcript" in formats and not current_tid:
-        # Skip this format only — the others may already have been written
-        errors.append(tr("Inget transkript öppet för detta exportformat."))
-    elif "md_transcript" in formats:
-        try:
-            coder = STATE["coder"]
-            md = exp_mod.export_markdown_transcript(STATE["folder"], STATE["project"], current_tid, coder, key=_key())
-            fname = _export_filename(tr("transkript") + "_" + current_tid, "md")
-            (dest / fname).write_text(md, encoding="utf-8")
-            written.append(fname)
-        except Exception:
-            logger.exception("export md_transcript failed")
-            errors.append("md_transcript")
-
-    if "qdpx" in formats:
-        try:
-            from core.qdpx import export_qdpx as _export_qdpx
-            fname = _export_filename("projekt", "qdpx")
-            (dest / fname).write_bytes(_export_qdpx(STATE["folder"], STATE["project"], key=_key()))
-            written.append(fname)
-        except Exception:
-            logger.exception("export qdpx failed")
-            errors.append("qdpx")
+            logger.exception("export %s failed", fmt)
+            errors.append(fmt)
 
     return jsonify({"ok": True, "written": written, "errors": errors, "folder": dest_str})
 

@@ -5902,7 +5902,6 @@ async function doAnalysisExport(format) {
   statusEl.textContent = t("analysis.exporting");
   const body = {
     format,
-    mode: _analysisState.displayMode,
     anchor_only: false,
     // Taggfiltret avgränsar urvalet för alla exporttyper, liksom i vyn och PNG
     tags: [..._analysisState.selectedTags],

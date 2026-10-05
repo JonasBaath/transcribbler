@@ -477,6 +477,29 @@ class TestExportToFolder:
         assert seen["tid"] is None
 
 
+    def test_csv_written_with_bom_and_crlf_untouched(self, flask_client, tmp_path):
+        r = flask_client.post("/api/export/to-folder", json={
+            "folder": str(tmp_path / "ut3"), "formats": ["csv_tidy"],
+        }, content_type="application/json")
+        data = (tmp_path / "ut3" / r.get_json()["written"][0]).read_bytes()
+        assert data.startswith(b"\xef\xbb\xbf")
+        assert b"\r\r\n" not in data
+
+    def test_downloads_have_filename_and_type(self, flask_client):
+        for url, ext, mime in [("/api/export/markdown/codebook", "md", "text/markdown"),
+                               ("/api/export/codebook/csv", "csv", "text/csv"),
+                               ("/api/export/code-matrix/csv", "csv", "text/csv"),
+                               ("/api/export/cooccurrence/csv", "csv", "text/csv"),
+                               ("/api/export/codetree/docx", "docx", "application/vnd.openxml"),
+                               ("/api/codings/export", "json", "application/json")]:
+            r = flask_client.get(url)
+            assert r.status_code == 200, url
+            assert r.headers["Content-Disposition"].endswith(f'.{ext}"'), url
+            assert r.mimetype.startswith(mime), url
+            if ext == "csv":
+                assert r.data.startswith(b"\xef\xbb\xbf"), url
+
+
 class TestCoderNameAndFilenames:
     def test_open_rejects_coder_with_dot(self, flask_client, tmp_project):
         folder, _ = tmp_project

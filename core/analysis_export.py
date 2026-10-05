@@ -6,7 +6,7 @@ import io
 from .i18n import tr
 
 
-def _group_excerpts(excerpts, mode):
+def _group_excerpts(excerpts):
     """Group excerpts by code. Returns [{code_id, code_name, code_color, code_number, code_path, excerpts: [...]}]."""
     groups = {}
     order = []
@@ -26,10 +26,10 @@ def _group_excerpts(excerpts, mode):
     return [groups[cid] for cid in order]
 
 
-def export_analysis_md(project, excerpts, mode="separate"):
+def export_analysis_md(project, excerpts):
     """Export excerpts as Markdown."""
     lines = [f"# {tr('Analys — {name}', name=project['name'])}\n"]
-    grouped = _group_excerpts(excerpts, mode)
+    grouped = _group_excerpts(excerpts)
     for g in grouped:
         prefix = f"{g['code_number']}. " if g["code_number"] else ""
         lines.append(f"\n## {prefix}{g['code_path'] or g['code_name']}\n")
@@ -44,7 +44,7 @@ def export_analysis_md(project, excerpts, mode="separate"):
     return "\n".join(lines)
 
 
-def export_analysis_csv(project, excerpts, mode="separate"):
+def export_analysis_csv(project, excerpts):
     """Export excerpts as CSV."""
     buf = io.StringIO()
     writer = csv.writer(buf)
@@ -71,13 +71,13 @@ def export_analysis_csv(project, excerpts, mode="separate"):
     return buf.getvalue()
 
 
-def export_analysis_docx(project, excerpts, mode="separate"):
+def export_analysis_docx(project, excerpts):
     """Export excerpts as DOCX."""
     from docx import Document
     from docx.shared import Pt, RGBColor
     doc = Document()
     doc.add_heading(tr("Analys — {name}", name=project["name"]), level=0)
-    grouped = _group_excerpts(excerpts, mode)
+    grouped = _group_excerpts(excerpts)
     for g in grouped:
         prefix = f"{g['code_number']}. " if g["code_number"] else ""
         heading = doc.add_heading(f"{prefix}{g['code_path'] or g['code_name']}", level=1)
@@ -113,7 +113,7 @@ def export_analysis_docx(project, excerpts, mode="separate"):
     return buf.getvalue()
 
 
-def export_analysis_odt(project, excerpts, mode="separate"):
+def export_analysis_odt(project, excerpts):
     """Export excerpts as ODT."""
     from odf.opendocument import OpenDocumentText
     from odf.text import P, H, Span
@@ -142,7 +142,7 @@ def export_analysis_odt(project, excerpts, mode="separate"):
 
     doc.text.addElement(H(outlinelevel=1, text=tr("Analys — {name}", name=project["name"])))
 
-    grouped = _group_excerpts(excerpts, mode)
+    grouped = _group_excerpts(excerpts)
     for g in grouped:
         prefix = f"{g['code_number']}. " if g["code_number"] else ""
         doc.text.addElement(H(outlinelevel=2, text=f"{prefix}{g['code_path'] or g['code_name']}"))
