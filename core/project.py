@@ -19,9 +19,6 @@ PROJECT_FILE = "project.json"
 TRANSCRIPTS_DIR = "transcripts"
 ANNOTATIONS_DIR = "annotations"
 
-# Importera bildstöd från ocr-modulen (undviker duplicering)
-from core.ocr import SUPPORTED_IMAGES, is_image  # noqa: E402
-
 
 def _now():
     return datetime.now().isoformat(timespec="seconds")
@@ -281,7 +278,7 @@ def add_audio_transcript(folder: str, project: dict, tid: str, name: str,
     # Write extracted plain text
     txt_path = folder_path / TRANSCRIPTS_DIR / f"{tid}.txt"
     if key:
-        from core.crypto import encrypt_text_file, encrypt_json_file
+        from core.crypto import encrypt_text_file
         encrypt_text_file(txt_path, text, key)
     else:
         txt_path.write_text(text, encoding="utf-8")

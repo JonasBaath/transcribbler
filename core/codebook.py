@@ -90,7 +90,7 @@ def merge_codes(project: dict, folder: str, source_id: str, target_id: str, *, k
     re-parent source's children to target, then delete source.
     Returns updated project. Handles overlapping annotations by removing duplicates.
     """
-    from core.annotation import load_all_coders, load_annotations, save_annotations
+    from core.annotation import load_all_coders, save_annotations
 
     source = get_code(project, source_id)
     target = get_code(project, target_id)

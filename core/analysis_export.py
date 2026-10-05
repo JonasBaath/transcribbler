@@ -3,7 +3,6 @@ analysis_export.py — Export analysis view excerpts in various formats.
 """
 import csv
 import io
-from .export import _code_path
 from .i18n import tr
 
 

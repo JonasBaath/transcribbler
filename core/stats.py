@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from .annotation import load_all_coders
 from .i18n import tr
-from .codebook import get_code, build_tree
+from .codebook import build_tree
 
 
 def compute_stats(folder: str, project: dict, tid: str = None, *, key: bytes | None = None) -> dict:

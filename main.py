@@ -1490,7 +1490,6 @@ def _ocr_photos_job(job_id: str, tid: str, folder: str, photo_paths: list,
         appended = separator.join(texts)
         new_text = (existing.rstrip() + separator + appended) if existing.strip() else appended
         if enc_key:
-            from core.crypto import encrypt_text_file
             encrypt_text_file(txt_path, new_text, enc_key)
         else:
             txt_path.write_text(new_text, encoding="utf-8")
@@ -1809,7 +1808,6 @@ def delete_code(code_id):
                 if len(kept) != len(anns):
                     data["annotations"] = kept
                     if _key():
-                        from core.crypto import encrypt_json_file
                         encrypt_json_file(f, data, _key())
                     else:
                         with open(f, "w", encoding="utf-8") as fh:
@@ -2033,7 +2031,6 @@ def _ascii_slug(text: str) -> str:
 def _export_filename(stem: str, ext: str) -> str:
     """Build a safe filename: <stem>_<project>_<datetime>.<ext>"""
     from datetime import datetime as _dt
-    import re
     proj_name = STATE.get("project", {}).get("name", "") if STATE.get("project") else ""
     safe = _ascii_slug(proj_name)
     dt_str = _dt.now().strftime("%Y-%m-%d_%H%M")

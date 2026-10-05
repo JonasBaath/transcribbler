@@ -7,7 +7,6 @@ laddas ned automatiskt vid första körning och cachas i ~/.EasyOCR/.
 Kräver: easyocr>=1.7  (pip install easyocr)
 """
 from __future__ import annotations
-from pathlib import Path
 
 _READER = None
 

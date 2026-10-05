@@ -6,7 +6,7 @@ from __future__ import annotations
 import csv
 import io
 from .annotation import load_all_coders, is_text_annotation
-from .codebook import get_code, flat_list, build_tree
+from .codebook import get_code, build_tree
 from .project import get_transcript_text
 from .i18n import tr
 

@@ -166,9 +166,7 @@ const FMT_KEY_SIZE = "transcribbler_font_size";
 const FMT_KEY_FAM  = "transcribbler_font_family";
 
 // Audio job state
-let _pendingJobResult = null;
 let _hfTokenCallback  = null;
-let _audioCommitResolve = null;  // resolves when speaker dialog is confirmed/cancelled — drives multi-file audio batches
 let _audioBatch = [];            // {jobId, name, speakers_found, voice_matches} per pending audio file (multi-file mode)
 let _transcriptAborted = false;  // set true when user cancels mid-transcription
 
@@ -783,9 +781,7 @@ function resetAllProjectState() {
   if (ap) { ap.pause(); ap.removeAttribute("src"); ap.load(); }
   document.getElementById("audio-player-wrap")?.classList.add("hidden");
   document.getElementById("transcript-text")?.classList.remove("has-audio");
-  _pendingJobResult = null;
   _hfTokenCallback = null;
-  _audioCommitResolve = null;
   _audioBatch = [];
   _transcriptAborted = false;
 
@@ -1458,55 +1454,6 @@ document.getElementById("setting-auto-identify")?.addEventListener("change", asy
   const res = await PATCH("/api/project/settings", { auto_identify: this.checked });
   if (res.ok) project = res.project;
 });
-
-// ---------------------------------------------------------------------------
-// Speaker naming dialog
-document.getElementById("btn-spk-cancel")?.addEventListener("click", () => {
-  document.getElementById("modal-speaker-names").classList.add("hidden");
-  _pendingJobResult = null;
-  // Signal the upload loop that the user aborted — abort the rest of the batch
-  if (_audioCommitResolve) {
-    const r = _audioCommitResolve;
-    _audioCommitResolve = null;
-    r(false);
-  }
-});
-
-document.getElementById("btn-spk-confirm")?.addEventListener("click", async () => {
-  const speakerMap = {};
-  document.querySelectorAll(".spk-name-input").forEach(inp => {
-    const spkId = inp.dataset.spk;
-    const name  = inp.value.trim();
-    if (name) speakerMap[spkId] = name;
-  });
-  await commitTranscript(speakerMap);
-});
-
-async function commitTranscript(speakerMap) {
-  if (!_pendingJobResult) return;
-  const { jobId, name } = _pendingJobResult;
-  const errEl = document.getElementById("spk-error");
-  errEl.textContent = "";
-
-  const res = await POST(`/api/transcripts/commit/${jobId}`, { name, speakers: speakerMap });
-  if (res.error) {
-    // Don't resolve _audioCommitResolve — leave the dialog open so user can retry
-    errEl.textContent = res.error;
-    return;
-  }
-
-  project = res.project;
-  _pendingJobResult = null;
-  document.getElementById("modal-speaker-names").classList.add("hidden");
-  renderTranscriptList();
-
-  // Signal the upload loop that this audio file is committed — continue with the next
-  if (_audioCommitResolve) {
-    const r = _audioCommitResolve;
-    _audioCommitResolve = null;
-    r(true);
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Batch speaker naming dialog (multi-file)
