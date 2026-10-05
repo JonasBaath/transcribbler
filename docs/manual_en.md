@@ -18,7 +18,7 @@ Download the latest version from GitHub:
 
 https://github.com/JonasBaath/transcribbler/releases
 
-Choose the file for your operating system under **Assets**. Everything you need is included in the app; you do not need to install Python or anything else.
+Choose the file for your operating system under **Assets**. Everything you need is included in the app; you do not need to install Python or anything else. Once installed, the app takes up about 2.5 GB on Windows and 1.7 GB on macOS.
 
 | System | File |
 |--------|------|
@@ -44,9 +44,10 @@ If macOS says the app is "damaged", open Terminal and run `xattr -cr /Applicatio
 
 ### Windows
 
-1. Double-click the .exe file.
-2. If "Windows protected your PC" appears, click **More info** and then **Run anyway**.
-3. The installation runs automatically and the app starts when it has finished. You will then find it in the Start menu.
+1. If your browser warns that the file is not commonly downloaded, keep it. In Edge: choose **…** next to the file, then **Keep**, **Show more** and **Keep anyway**.
+2. Double-click the .exe file.
+3. If "Windows protected your PC" appears, click **More info** and then **Run anyway**.
+4. The installation runs automatically and the app starts when it has finished. You will then find it in the Start menu.
 
 ### Linux
 
@@ -58,6 +59,8 @@ If it does not start on Ubuntu 22.04 or later, FUSE is needed: `sudo apt install
 ### First start
 
 It may take a few seconds before the start screen appears. The app uses your computer's language if it is Swedish, and English otherwise; switch with **EN**/**SV** at the top right.
+
+On Windows, the very first start can take several minutes while the computer checks the app's files. If "Could not start the Flask server" appears, click **OK** and start Transcribbler again; the next start is faster.
 
 ---
 

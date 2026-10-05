@@ -18,7 +18,7 @@ Ladda ner den senaste versionen från GitHub:
 
 https://github.com/JonasBaath/transcribbler/releases
 
-Välj filen för ditt operativsystem under **Assets**. Allt som behövs ingår i appen; du behöver inte installera Python eller något annat.
+Välj filen för ditt operativsystem under **Assets**. Allt som behövs ingår i appen; du behöver inte installera Python eller något annat. Installerad tar appen ungefär 2,5 GB på Windows och 1,7 GB på macOS.
 
 | System | Fil |
 |--------|-----|
@@ -44,9 +44,10 @@ Säger macOS att appen är "skadad", öppna Terminal och kör `xattr -cr /Applic
 
 ### Windows
 
-1. Dubbelklicka på .exe-filen.
-2. Visas "Windows skyddade datorn", klicka **Mer information** och sedan **Kör ändå**.
-3. Installationen sker automatiskt och appen startar när den är klar. Den finns sedan i Start-menyn.
+1. Varnar webbläsaren att filen inte laddas ned ofta, behåll den. I Edge: välj **…** vid filen, sedan **Behåll**, **Visa mer** och **Behåll ändå**.
+2. Dubbelklicka på .exe-filen.
+3. Visas "Windows skyddade datorn", klicka **Mer information** och sedan **Kör ändå**.
+4. Installationen sker automatiskt och appen startar när den är klar. Den finns sedan i Start-menyn.
 
 ### Linux
 
@@ -58,6 +59,8 @@ Startar den inte på Ubuntu 22.04 eller senare behövs FUSE: `sudo apt install l
 ### Första start
 
 Det kan ta några sekunder innan startskärmen visas. Programmet visas på samma språk som datorn om det är svenska, annars på engelska; byt med **EN**/**SV** uppe till höger.
+
+På Windows kan den allra första starten ta flera minuter medan datorn kontrollerar programmets filer. Visas "Kunde inte starta Flask-servern", klicka **OK** och starta Transcribbler igen; nästa start går fortare.
 
 ---
 

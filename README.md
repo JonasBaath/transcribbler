@@ -45,7 +45,7 @@ The sections below are for running from source.
 | Component | Minimum | Recommended |
 |-----------|---------|-------------|
 | **RAM** | 4 GB | 8 GB+ |
-| **Disk** | 3 GB free (models + app) | 5 GB+ free |
+| **Disk** | 2.5 GB free on Windows, 1.7 GB on macOS (app) | 6 GB+ free if transcription is enabled (speech model ~3 GB) |
 | **GPU** | Not required | Apple Silicon (MPS) or NVIDIA (CUDA) for fast diarisation |
 | **OS** | macOS 12+, Windows 10+, Ubuntu 20.04+ | Latest stable |
 
