@@ -15,7 +15,7 @@ from pathlib import Path
 
 import docx
 
-from core.crypto import read_project_text, write_project_json, write_project_text
+from core.crypto import normalise_newlines, read_project_text, write_project_json, write_project_text
 
 PROJECT_FILE = "project.json"
 TRANSCRIPTS_DIR = "transcripts"
@@ -636,11 +636,14 @@ def _extract_odt_with_formatting(path: Path) -> tuple:
 def _read_text_autodetect(path: Path) -> str:
     """Read a plain-text file, detecting the encoding when possible."""
     raw = path.read_bytes()
+    text = None
     try:
         from charset_normalizer import from_bytes
         best = from_bytes(raw).best()
         if best is not None:
-            return str(best)
+            text = str(best)
     except Exception:
         pass
-    return raw.decode("utf-8", errors="replace")
+    if text is None:
+        text = raw.decode("utf-8", errors="replace")
+    return normalise_newlines(text)

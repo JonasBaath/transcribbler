@@ -148,9 +148,14 @@ def decrypt_json_file(path: Path, key: bytes):
 # Project files are encrypted when the project has a key. Files written before
 # encryption was switched on stay plain, so reads check the magic bytes.
 
+def normalise_newlines(text: str) -> str:
+    # Annotation offsets come from the browser, which turns \r\n and \r into \n
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
 def read_project_text(path: Path, key: bytes | None) -> str:
     if key and is_encrypted_file(path):
-        return decrypt_text_file(path, key)
+        return normalise_newlines(decrypt_text_file(path, key))
     return path.read_text(encoding="utf-8")
 
 
